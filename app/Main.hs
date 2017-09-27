@@ -1,6 +1,12 @@
 module Main where
 
-import Lib
+import Parser
+import Emitter
+
+import System.Environment
 
 main :: IO ()
-main = someFunc
+main = do
+    file <- getContents
+    print $ parser file
+
