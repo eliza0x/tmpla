@@ -9,8 +9,10 @@ module Parser
 import Text.Megaparsec hiding (label, Label)
 import Prelude hiding (div) 
 
-data Expr = Define String [String] Term
-          deriving (Show, Eq)
+data Expr = Define { name :: String
+                   , args :: [String]
+                   , body :: Term
+                   } deriving (Show, Eq)
 
 data Term = Add Term Term
           | Sub Term Term
@@ -52,13 +54,6 @@ term = try (do
     where
     equal = return Eq <* char '='
     notEqual = return Eq <* string "/="
-
-{-
-term = space *> (equal <|> notEqual <|> term' ) <* space
-    where
-    equal    = Eq <$> (try (term' <* char '=') <* space)    <*> term <?> "equal"
-    notEqual = Ne <$> (try (term' <* string "/=") <* space) <*> term <?> "not equal"
--}
 
 term' :: TmplaParser Term
 term' = try (do
