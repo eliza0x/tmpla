@@ -9,23 +9,24 @@ module Parser
 import Text.Megaparsec hiding (label, Label)
 import Prelude hiding (div) 
 
-data Expr = Define { name :: String
+data Expr = Define { pos  :: SourcePos
+                   , name :: String
                    , args :: [String]
                    , body :: Term
                    } deriving (Show, Eq)
 
-data Term = Add Term Term
-          | Sub Term Term
-          | Mul Term Term
-          | Div Term Term
-          | Call Term [Term]
-          | Eq Term Term
-          | Ne Term Term
-          | If Term Term Term
-          | True
-          | False
-          | Num Int
-          | Label String
+data Term = Add   SourcePos Term Term
+          | Sub   SourcePos Term Term
+          | Mul   SourcePos Term Term
+          | Div   SourcePos Term Term
+          | Call  SourcePos Term [Term]
+          | Eq    SourcePos Term Term
+          | Ne    SourcePos Term Term
+          | If    SourcePos Term Term   Term
+          | True  SourcePos
+          | False SourcePos
+          | Num   SourcePos Int
+          | Label SourcePos String
           deriving (Show, Eq)
 
 type TmplaParser = Parsec Dec String
@@ -40,17 +41,19 @@ expr = some define <* eof
 define :: TmplaParser Expr
 define = space
      *>  (Define 
-     <$> word
+     <$> getPosition
+     <*> word
      <*> (many word <* string ":=" <* space)
      <*> (term <* char ';'))
      <* space
 
 term :: TmplaParser Term
 term = try (do
+    pos <- getPosition
     t <- term'
     op <- equal <|> notEqual
     t' <- term
-    return $ op t t') <|> term'
+    return $ op pos t t') <|> term'
     where
     equal = return Eq <* char '='
     notEqual = return Eq <* string "/="
@@ -60,60 +63,59 @@ term' = try (do
     t <- term''
     op <- add <|> sub
     t' <- term'
-    return $ op t t') <|> term''
+    return $ op pos t t') <|> term''
     where
-    add = return Add <* char '+'
-    sub = return Sub <* char '-'
+    add = return . Add <$> (getPosition <* char '+')
+    sub = return . Sub <$> (getPosition <* char '-')
 
 term'' :: TmplaParser Term
 term'' = try (do
     t <- term'''
     op <- mul <|> div
     t' <- term''
-    return $ op t t') <|> term'''
+    return $ op pos t t') <|> term'''
     where
-    mul = return Mul <* char '*'
-    div = return Div <* char '/'
+    mul = return . Mul <$> (getPosition <* char '*')
+    div = return . Div <$> (getPosition <* char '/')
 
 term''' :: TmplaParser Term
 term''' = space *> ( brace 
                  <|> ifParser
                  <|> call 
                  <|> label
-                 <|> true
-                 <|> false
+                 <|> bool
                  <|> num
                    ) <* space
     where
     call :: TmplaParser Term
     call = try $ do
+        pos <- getPosition
         l <- label
         args <- some term <* space
-        return $ Call l args
+        return $ Call pos l args
    
     brace :: TmplaParser Term
     brace = between (char '(') (char ')') term
 
     ifParser :: TmplaParser Term
     ifParser = do
-        _  <- space *> string "if"   <* space
+        pos <- getPosition <* space <* string "if" <* space
         t   <- term <* string "then" <* space
         t'  <- term <* string "else" <* space
         t'' <- term
-        return $ If t t' t''
+        return $ If pos t t' t''
    
-    true :: TmplaParser Term
-    true = do
-        _ <- space *> string "true" <* space
-        return Parser.True
-
-    false :: TmplaParser Term
-    false = do
-        _ <- space *> string "false" <* space
-        return Parser.False
+    bool :: TmplaParser Term
+    bool = do
+        pos <- getPosition <* space
+        t <- true <|> false
+        return $ t pos
+        where
+        true  = string "true" *> return Parser.True
+        false = string "false" *> return Parser.False
 
 label :: TmplaParser Term
-label = Label <$> word
+label = Label <$> getPosition <*> word
 
 word :: TmplaParser String
 word = do
@@ -134,5 +136,4 @@ word = do
                <|> string "false"
 
 num :: TmplaParser Term
-num = Num . read <$> (space *> some digitChar <* space)
-
+num = Num <$> getPosition <*> (read <$> (space *> some digitChar <* space))
