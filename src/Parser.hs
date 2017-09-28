@@ -4,6 +4,9 @@ module Parser
     ( parser
     , Expr(..)
     , Term(..)
+    , SourcePos(..)
+    , sourcePosPretty
+    , mkPos
     ) where
 
 import Text.Megaparsec hiding (label, Label)
@@ -19,9 +22,11 @@ data Term = Add   SourcePos Term Term
           | Sub   SourcePos Term Term
           | Mul   SourcePos Term Term
           | Div   SourcePos Term Term
-          | Call  SourcePos Term [Term]
+          | Call  SourcePos String [Term]
           | Eq    SourcePos Term Term
           | Ne    SourcePos Term Term
+          | Gt    SourcePos Term Term
+          | Lt    SourcePos Term Term
           | If    SourcePos Term Term   Term
           | True  SourcePos
           | False SourcePos
@@ -49,14 +54,16 @@ define = space
 
 term :: TmplaParser Term
 term = try (do
-    pos <- getPosition
+    p <- getPosition
     t <- term'
-    op <- equal <|> notEqual
+    op <- equal <|> notEqual <|> greaterThan <|> lowerThan
     t' <- term
-    return $ op pos t t') <|> term'
+    return $ op p t t') <|> term'
     where
-    equal = return Eq <* char '='
-    notEqual = return Eq <* string "/="
+    equal       = return Eq <* char '='
+    notEqual    = return Ne <* string "/="
+    greaterThan = return Gt <* string ">"
+    lowerThan   = return Lt <* string "<"
 
 term' :: TmplaParser Term
 term' = try (do
@@ -88,28 +95,24 @@ term''' = space *> ( brace
                    ) <* space
     where
     call :: TmplaParser Term
-    call = try $ do
-        pos <- getPosition
-        l <- label
-        args <- some term <* space
-        return $ Call pos l args
+    call = try $ Call <$> getPosition <*> word <*> (some term <* space)
    
     brace :: TmplaParser Term
     brace = between (char '(') (char ')') term
 
     ifParser :: TmplaParser Term
     ifParser = do
-        pos <- getPosition <* space <* string "if" <* space
+        p <- getPosition <* space <* string "if" <* space
         t   <- term <* string "then" <* space
         t'  <- term <* string "else" <* space
         t'' <- term
-        return $ If pos t t' t''
+        return $ If p t t' t''
    
     bool :: TmplaParser Term
     bool = do
-        pos <- getPosition <* space
+        p <- getPosition <* space
         t <- true <|> false
-        return $ t pos
+        return $ t p
         where
         true  = string "true" *> return Parser.True
         false = string "false" *> return Parser.False

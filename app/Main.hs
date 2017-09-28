@@ -1,12 +1,13 @@
 module Main where
 
 import Parser
+import KNormal
 -- import Emitter
-
-import System.Environment
 
 main :: IO ()
 main = do
-    file<- getContents
-    print $ parser file
+    file <- getContents
+    let exprs = parser file
+    knorms <- knormalize exprs 
+    putStrLn . unlines $ map show knorms
 
