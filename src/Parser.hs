@@ -1,5 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{- |
+Module      : Parser
+Description : ソースコードを木に変換する
+Copyright   : (c) eliza0x, 2017
+License     : MIT
+Maintainer  : me@eliza.link
+Stability   : experimental
+
+ソースコードを木構造に変換する。
+-}
+
 module Parser
     ( parser
     , Expr(..)
