@@ -33,7 +33,7 @@ parser = either (error . parseErrorPretty) id
        . parse expr "Parser.hs"
 
 expr :: TmplaParser [Expr]
-expr = space *> some define <* space <* eof
+expr = some define <* eof
 
 define :: TmplaParser Expr
 define = space
@@ -44,41 +44,64 @@ define = space
      <* space
 
 term :: TmplaParser Term
-term = space *> ( try equal <|> try notEqual <|> term' ) <* space
+term = try (do
+    t <- term'
+    op <- equal <|> notEqual
+    t' <- term
+    return $ op t t') <|> term'
     where
-    equal = Eq <$> (term' <* char '=' <* space) <*> term
-    notEqual = Ne <$> (term' <* string "/=" <* space) <*> term
+    equal = return Eq <* char '='
+    notEqual = return Eq <* string "/="
+
+{-
+term = space *> (equal <|> notEqual <|> term' ) <* space
+    where
+    equal    = Eq <$> (try (term' <* char '=') <* space)    <*> term <?> "equal"
+    notEqual = Ne <$> (try (term' <* string "/=") <* space) <*> term <?> "not equal"
+-}
 
 term' :: TmplaParser Term
-term' = space *> (try add <|> try sub <|> term'') <* space
+term' = try (do
+    t <- term''
+    op <- add <|> sub
+    t' <- term'
+    return $ op t t') <|> term''
     where
-    add = Add <$> (term'' <* char '+' <* space) <*> term'
-    sub = Sub <$> (term'' <* char '-' <* space) <*> term'
+    add = return Add <* char '+'
+    sub = return Sub <* char '-'
 
 term'' :: TmplaParser Term
-term'' = space *> (try mul <|> try div <|> term''') <* space
+term'' = try (do
+    t <- term'''
+    op <- mul <|> div
+    t' <- term''
+    return $ op t t') <|> term'''
     where
-    mul = Mul <$> (term''' <* char '*' <* space) <*> term''
-    div = Div <$> (term''' <* char '/' <* space) <*> term''
+    mul = return Mul <* char '*'
+    div = return Div <* char '/'
 
 term''' :: TmplaParser Term
 term''' = space *> ( brace 
                  <|> ifParser
-                 <|> try call 
-                 <|> try num
-                 <|> try true
-                 <|> try false
+                 <|> call 
+                 <|> label
+                 <|> true
+                 <|> false
+                 <|> num
                    ) <* space
     where
     call :: TmplaParser Term
-    call = Call <$> label <*> (many (space *> term) <* space)
+    call = try $ do
+        l <- label
+        args <- some term <* space
+        return $ Call l args
    
     brace :: TmplaParser Term
     brace = between (char '(') (char ')') term
 
     ifParser :: TmplaParser Term
     ifParser = do
-        _ <- space *> string "if" <* space
+        _  <- space *> string "if"   <* space
         t   <- term <* string "then" <* space
         t'  <- term <* string "else" <* space
         t'' <- term
@@ -108,6 +131,7 @@ word = do
     where
     reservedWord :: TmplaParser String
     reservedWord = string ":="
+               <|> string ";"
                <|> string "if"
                <|> string "then"
                <|> string "else"
