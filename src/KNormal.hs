@@ -60,25 +60,25 @@ instance Show KBlock where
     show (KBlock _ n as b) = n ++ " " ++ unwords as ++ " {\n" ++ unlines (map (\x->tab++show x) b) ++ "}\n"
 
 tab :: String
-tab = "    "
+tab = L.replicate 4 ' '
 
 instance Show KNormal where
-    show (Add   _ result var var') = concat [t5 result, " := ", t5 var, " + ",  t5 var', ";"]
-    show (Sub   _ result var var') = concat [t5 result, " := ", t5 var, " - ",  t5 var', ";"]
-    show (Mul   _ result var var') = concat [t5 result, " := ", t5 var, " * ",  t5 var', ";"]
-    show (Div   _ result var var') = concat [t5 result, " := ", t5 var, " / ",  t5 var', ";"]
-    show (Eq    _ result var var') = concat [t5 result, " := ", t5 var, " = ",  t5 var', ";"]
-    show (Ne    _ result var var') = concat [t5 result, " := ", t5 var, " /= ", t5 var', ";"]
-    show (Gt    _ result var var') = concat [t5 result, " := ", t5 var, " > ",  t5 var', ";"]
-    show (Lt    _ result var var') = concat [t5 result, " := ", t5 var, " < ",  t5 var', ";"]
-    show (App   _ result var vars) = concat [t5 result, " := ", t5 var, "(", L.intercalate ", " (map t5 vars), ");"]
+    show (Add   _ result var var') = concat [cut result, " := ", cut var, " + ",  cut var', ";"]
+    show (Sub   _ result var var') = concat [cut result, " := ", cut var, " - ",  cut var', ";"]
+    show (Mul   _ result var var') = concat [cut result, " := ", cut var, " * ",  cut var', ";"]
+    show (Div   _ result var var') = concat [cut result, " := ", cut var, " / ",  cut var', ";"]
+    show (Eq    _ result var var') = concat [cut result, " := ", cut var, " = ",  cut var', ";"]
+    show (Ne    _ result var var') = concat [cut result, " := ", cut var, " /= ", cut var', ";"]
+    show (Gt    _ result var var') = concat [cut result, " := ", cut var, " > ",  cut var', ";"]
+    show (Lt    _ result var var') = concat [cut result, " := ", cut var, " < ",  cut var', ";"]
+    show (App   _ result var vars) = concat [cut result, " := ", cut var, "(", L.intercalate ", " (map cut vars), ");"]
     show (Call  _ result label)    = result ++ " := call " ++ label
-    show (KNormal.True  _ result)  = t5 result ++ " := true;"
-    show (KNormal.False _ result)  = t5 result ++ " := false;"
+    show (KNormal.True  _ result)  = cut result ++ " := true;"
+    show (KNormal.False _ result)  = cut result ++ " := false;"
     show (Num   _ result n)        = result ++ " := " ++ show n ++ ";"
     show (Label _ result label)    = result ++ " := " ++ label ++ ";"
     show (If    _ result bool norm norm') = 
-        t5 result ++ " := if {\n" ++ unlines (map (\x->tab++show x) bool) 
+        cut result ++ " := if {\n" ++ unlines (map (\x->tab++show x) bool) 
         ++ "} then {\n" 
         ++ unlines (map (\x->tab++show x) norm)
         ++ "} else {\n"
@@ -90,8 +90,8 @@ instance Show KNormal where
         ++ unlines (map (unlines . map (\x->tab++tab++x) . lines . show) norms) 
         ++ tab ++ "}\n"
  
-t5 :: String -> String
-t5 = take 7
+cut :: String -> String
+cut = take 7
 
 data NameTag a = Tag String a
 

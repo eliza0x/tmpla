@@ -13,6 +13,9 @@ main = do
     arg <- head <$> getArgs
     file <- readFile arg
     let exprs = parser arg file
+    putStrLn "Source code"
+    putStrLn file
+    putStrLn "---------------"
     putStrLn "Parse"
     mapM_ print exprs
     putStrLn "---------------"
