@@ -18,12 +18,9 @@ import qualified Data.Map.Strict as M
 import qualified Data.List as L
 import Data.Maybe (fromMaybe)
 
-import Debug.Trace (trace)
-
 type Env = M.Map String Type
 
--- TODO: 本当はTermから一意に定まるようになっているほうがいい気がする
--- TODO: ユーザー定義型を受け入れられるようにする
+-- TODO: #2 本当はTermから一意に定まるようになっているほうがいい気がする
 data Type = Int  P.SourcePos
           | Bool P.SourcePos
           | Func P.SourcePos [Type] 
@@ -55,7 +52,7 @@ typeCheck' env (P.Define p l as t)  = let
     env' = foldr (\(k,v) e->M.insert k v e) env $ zip as $ case typeFromEnv env p l of
         (Func _ asType) -> asType
         x               -> [x]
-    -- TODO: #3 何故かうまいこといかないので応急処置的にshowを噛ませている、のちのち治すこと
+    -- TODO: #1 何故かうまいこといかないので応急処置的にshowを噛ませている、のちのち治すこと
     in show (eval env' t) == show ((retType . typeFromEnv env' p) l)
 
     where
@@ -64,8 +61,8 @@ typeCheck' env (P.Define p l as t)  = let
     typeFromEnv e p' l' = fromMaybe (error $ "[ERROR] Can't find \"" ++ l' ++ "\".\n" ++ P.sourcePosPretty p') 
                 $ M.lookup l e :: Type
 
--- TODO: MonadError等でエラーを投げ得ることを明示する
--- TODO: State等を使った方が簡潔に書ける気がする
+-- TODO: #4 MonadError等でエラーを投げ得ることを明示する
+-- TODO: #5 実装を整理する
 -- 演繹によって"返り値の型"を導出する。行き詰まり状態になるとエラーを投げる
 eval :: Env -> P.Term -> Type
 eval env body = case body of
@@ -112,7 +109,7 @@ eval env body = case body of
     isBool e t = case show $ eval e t of
         "Bool" -> True
         _      -> False
-    -- TODO: rename
+    -- TODO: #5 rename
     -- これ二つともInt?
     isNatWith :: Env -> P.SourcePos -> P.Term -> P.Term -> Type
     isNatWith e p t t' = case (isNat e t,  isNat e t') of
@@ -134,7 +131,7 @@ globalEnv exprs = foldr globalEnv' M.empty
                 then M.insert n (fromString p $ head a) env
                 else M.insert n (Func p (map (fromString p) a)) env
 
-          -- TODO: ユーザ定義型を受け入れられるようにする
+          -- TODO: #3 ユーザ定義型を受け入れられるようにする
           fromString :: P.SourcePos -> String -> Type
           fromString p "Int"  = Int p 
           fromString p "Bool" = Bool p
