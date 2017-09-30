@@ -1,2 +1,5 @@
-fact n := if iszero n then 1 else n * fact (n-1);
+main :: Int;
+main := fact 5;
 
+fact :: Int -> Int;
+fact n := n;
