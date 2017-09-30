@@ -188,7 +188,7 @@ typeDef = space
         *>  (TypeDef 
         <$> getPosition
         <*> (lowerWord <* string "::")
-        <*> (argsParser <* char ';'))
+        <*> argsParser)
         <* space
         where
         argsParser :: TmplaParser [String]

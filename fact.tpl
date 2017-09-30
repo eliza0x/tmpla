@@ -1,9 +1,9 @@
-main :: Int;
+main :: Int
 main := fact 5;
 
-fact :: Int -> Int;
+fact :: Int -> Int
 fact n := let
-    iszero :: Int -> Bool;
+    iszero :: Int -> Bool
     iszero n := n = 0;
     in if iszero n
         then 1 
