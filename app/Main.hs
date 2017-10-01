@@ -3,6 +3,7 @@ module Main where
 import Parser
 import PNormal
 import Type
+import Alpha
 -- import KNormal
 -- import Emitter
 
@@ -27,9 +28,14 @@ main = do
     let pnorm = pnormalize exprs
     print pnorm
     putStrLn "---------------"
-    putStrLn "Type Check"
-    let typed = E.run . EE.runExc $ typeCheck pnorm
-    putStrLn $ if isRight typed then "OK" else error $ show typed
+    putStrLn "Alpha"
+    let al = alpha pnorm
+    print al
+  
+    -- putStrLn "---------------"
+    -- putStrLn "Type Check"
+    -- let typed = E.run . EE.runExc $ typeCheck pnorm
+    -- putStrLn $ if isRight typed then "OK" else error $ show typed
     -- when typed $ do
     --     putStrLn "---------------"
     --     putStrLn "KNormal\n"

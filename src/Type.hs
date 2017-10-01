@@ -13,6 +13,9 @@ Stability   : experimental
 静的型検査をする。型推論は出来ないので明示的に型を書く必要がある。
 -}
 
+module Type where
+
+{-
 module Type
     ( typeCheck
     , TypeError(..)
@@ -134,3 +137,4 @@ eval env term = case term of
 inspectGlobEnv :: [N.Expr] -> Env
 inspectGlobEnv = undefined
 
+-}

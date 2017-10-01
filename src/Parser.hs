@@ -15,6 +15,7 @@ module Parser
     ( parser
     , Expr(..)
     , Term(..)
+    , Type
     , SourcePos(..)
     , sourcePosPretty
     , getPos
@@ -51,6 +52,8 @@ data Term = Add    SourcePos Term Term
           | Lambda SourcePos String Term
           deriving (Eq)
 
+type Type = String
+
 instance Show Expr where
     show (Define _ n as b) = "Define " ++ n ++ " " ++ show as ++ " " ++ show b
     show (TypeDef _ n as)  = "TypeDef " ++ n ++ " " ++ show as
@@ -71,7 +74,7 @@ instance Show Term where
     show (Num _ n)        = show n
     show (Label _ l)      = l
     show (Let _ exprs t)  = "Let " ++ show exprs ++ show t
-    show (Lambda _ l t)   = "\\" ++ show l ++ " -> " ++ show t
+    show (Lambda _ l tr)   = "\\" ++ show l ++ " -> " ++ show tr
 
 getPos :: Term -> SourcePos
 getPos (Add   p _ _)    = p
@@ -200,12 +203,12 @@ typeDef = space
         <*> (lowerWord <* string "::")
         <*> argsParser)
         <* space
-        where
-        argsParser :: TmplaParser [String]
-        argsParser = do
-            h <- upperWord
-            t <- many (string "->" *> upperWord)
-            return $ h:t
+
+argsParser :: TmplaParser [String]
+argsParser = do
+    h <- upperWord
+    t <- many (string "->" *> upperWord)
+    return $ h:t
 
 upperWord :: TmplaParser String
 upperWord = word upperChar

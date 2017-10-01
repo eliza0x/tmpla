@@ -18,17 +18,14 @@ module PNormal
     ) where
 
 import qualified Parser as P
+import qualified Data.Map.Lazy as M
+import qualified Data.Maybe as M
 
 data Expr = Define {
-            pos  :: P.SourcePos 
-          , name :: String 
-          , body :: Term 
-          }
-          | TypeDef {
-            pos  :: P.SourcePos 
-          , name :: String 
-          , args :: [String] 
-          } deriving (Show, Eq)
+            pos    :: P.SourcePos 
+          , name   :: String 
+          , body   :: Term 
+          } deriving Eq
 
 data Term = Add    P.SourcePos Term Term  
           | Sub    P.SourcePos Term Term    
@@ -44,16 +41,53 @@ data Term = Add    P.SourcePos Term Term
           | Num    P.SourcePos Int  
           | Label  P.SourcePos String     
           | Let    P.SourcePos [Expr] Term  
-          | Lambda P.SourcePos String Term    
+          | Lambda P.SourcePos String Type Term    
           | App    P.SourcePos String [Term]    
-          deriving (Show, Eq)
+          deriving Eq
+
+instance Show Expr where
+    show (Define _ n b) = "Define " ++ n ++ " " ++ show b
+
+instance Show Term where
+    show (Add _ t t')     = "Add " ++ show t ++ " " ++ show t'
+    show (Sub _ t t')     = "Sub " ++ show t ++ " " ++ show t'
+    show (Mul _ t t')     = "Mul " ++ show t ++ " " ++ show t'
+    show (Div _ t t')     = "Div " ++ show t ++ " " ++ show t'
+    show (App _ l ts)     = "App " ++ l ++ " " ++ show ts
+    show (Eq  _ t t')     = "Eq  " ++ show t ++ " " ++ show t'
+    show (Ne  _ t t')     = "Ne  " ++ show t ++ " " ++ show t'
+    show (Gt  _ t t')     = "Gt  " ++ show t ++ " " ++ show t'
+    show (Lt  _ t t')     = "Lt  " ++ show t ++ " " ++ show t'
+    show (If  _ b t t')   = "If  " ++ show b ++ " " ++ show t ++ " " ++ show t'
+    show (PNormal.True  _) = "True"
+    show (PNormal.False _) = "False"
+    show (Num _ n)        = show n
+    show (Label _ l)      = l
+    show (Let _ exprs t)  = "Let " ++ show exprs ++ " in " ++ show t
+    show (Lambda _ l _ tr)   = "\\" ++ show l ++ " -> " ++ show tr
+
+
+type Type = String
+type Env = M.Map String [Type]
 
 pnormalize :: [P.Expr] -> [Expr]
-pnormalize = map pnorm
+pnormalize exprs = map (pnorm (foldr genEnv M.empty $ filter (not . isDefine) exprs))
+                       (filter isDefine exprs)
     where
-    pnorm :: P.Expr -> Expr
-    pnorm (P.TypeDef p n as) = TypeDef p n as
-    pnorm (P.Define p n as b) = Define p n $ foldr (Lambda p) (preNormTerm b) as
+    isDefine :: P.Expr -> Bool
+    isDefine P.Define{} = Prelude.True
+    isDefine P.TypeDef{} = Prelude.False
+
+    genEnv :: P.Expr -> Env -> Env
+    genEnv (P.TypeDef _ n as) = M.insert n as
+
+    pnorm :: Env -> P.Expr -> Expr
+    pnorm env (P.Define p n as b) = let 
+        types :: [Type]
+        types = M.fromMaybe (replicate (length as) "Unknown") $ M.lookup n env
+        in Define p n
+         $ foldr ($) (preNormTerm b)
+         $ zipWith (Lambda p) as types
 
 preNormTerm :: P.Term -> Term
 preNormTerm term = case term of
@@ -71,7 +105,6 @@ preNormTerm term = case term of
     P.Num    p n      -> Num    p n      
     P.Label  p l      -> Label  p l       
     P.Let    p es t   -> Let    p (pnormalize es) (preNormTerm t)
-    P.Lambda p l t    -> Lambda p l (preNormTerm t)
+    P.Lambda p l t    -> Lambda p l "Unknown" (preNormTerm t)
     P.App    p l ts   -> App    p l (map preNormTerm ts)   
-    
 
