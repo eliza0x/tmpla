@@ -8,10 +8,7 @@ alpha :: [P.Expr] -> [P.Expr]
 alpha = alpha' "" M.empty
 
 alpha' :: String -> Env -> [P.Expr] -> [P.Expr]
-alpha' prefix env exprs = map (alphaExpr prefix (inspectEnv env exprs)) exprs
-
-inspectEnv :: Env -> [P.Expr] -> Env
-inspectEnv = foldr (\expr env' -> M.insert (P.name expr) (P.name expr) env')
+alpha' prefix env exprs = map (alphaExpr prefix (inspectEnv prefix env exprs)) exprs
 
 type Env = M.Map String String
 
@@ -41,6 +38,9 @@ alphaT prefix env term = case term of
     P.Lambda p l ty tr -> P.Lambda p (prefix++"#"++l) ty $ alphaT (prefix++"#"++l) (M.insert l (prefix++"#"++l) env) tr
     P.App    p l ts    -> P.App p l $ map (alphaT prefix env) ts
     P.Let    p es t    -> let
-        env' = inspectEnv env es
+        env' = inspectEnv prefix env es
         in P.Let p (alpha' prefix env' es) (alphaT prefix env' t)
+
+inspectEnv :: String -> Env -> [P.Expr] -> Env
+inspectEnv prefix =  foldr (\expr env' -> M.insert (P.name expr) (prefix ++ "#" ++ P.name expr) env') 
 
