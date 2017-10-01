@@ -1,4 +1,6 @@
-module Alpha where
+module Alpha
+    ( alpha
+    ) where
 
 import qualified PNormal as P
 import qualified Data.Map.Lazy as M

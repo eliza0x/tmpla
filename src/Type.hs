@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
-{-#LANGUAGE NoMonomorphismRestriction #-}
 
 {- |
 Module      : Type
@@ -14,12 +13,6 @@ Stability   : experimental
 -}
 
 module Type where
-
-{-
-module Type
-    ( typeCheck
-    , TypeError(..)
-    )where
  
 import qualified Parser as P
 import qualified PNormal as N
@@ -34,42 +27,75 @@ import qualified Control.Eff.State.Lazy as ES
 import qualified Data.Typeable as T
 
 -- import qualified Control.Monad as C
-import qualified Data.List as L
--- import Data.Maybe (fromMaybe)
+-- import qualified Data.List as L
+import Data.Maybe (fromMaybe)
 
-type Env     = M.Map String Type
-type LocalEnv = M.Map  String Local
+newtype Env = Env (M.Map String TypeAndRef)
 
-data Local = Local  { funcName :: String, applyTime :: Int, typeOf :: Type }
+-- TODO: 参照と型の直和
+data TypeAndRef = TypeAndRef { ref    :: Maybe String
+                             , typeOf :: Type
+                             } deriving (Show, Eq)
 
 -- | エラー型
 data TypeError = NotMatch{  pos :: P.SourcePos, ans  :: Type, actual :: Type } -- ^ 目当てのものと違う型が来ている
                | DiffTypes{ pos :: P.SourcePos, type1:: Type, type2  :: Type } -- ^ 異なった型のものを比較している
+               | CanNotApply { pos :: P.SourcePos, type1 :: Type, type2 :: Type } -- ^ 不可能な型を適用しようとしている
+               | NotFound { pos :: P.SourcePos, key :: String } -- ^ 存在しない何かを呼んでいる
                deriving (Show, Eq, T.Typeable)
 
 -- TODO: #2 本当はTermから一意に定まるようになっているほうがいい気がする
 data Type = Int     P.SourcePos
           | Bool    P.SourcePos
-          | Unknown P.SourcePos String
-          | Arr     P.SourcePos [Type]
+          | Unknown P.SourcePos
+          | Arr     P.SourcePos Type Type
 
 instance Show Type where
     show (Int _)       = "Int"
     show (Bool _)      = "Bool"
-    show (Unknown _ s) = s
-    show (Arr _ t)   = L.intercalate " -> " $ map show t
+    show (Unknown _)   = "Unknown"
+    show (Arr _ t t')  = show t ++ " -> " ++ show t'
 
 instance Eq Type where
-    Int{}     == Int{}  = True
-    Bool{}    == Bool{} = True
-    Unknown{} == _      = True
-    Arr _ t == Arr _ t' = and $ zipWith (==) t t'
-    Int{}     == _      = False
-    Bool{}    == _      = False
-    Arr{}     == _      = False
+    Int{}        == Int{}        = True
+    Bool{}       == Bool{}       = True
+    Unknown{}    == _            = True
+    Arr _ t1 t1' == Arr _ t2 t2' = t1 == t2 && t1' == t2'
+    Int{}        == _            = False
+    Bool{}       == _            = False
+    Arr{}        == _            = False
+
+typeFromEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
+            => P.SourcePos
+            -> String
+            -> E.Eff r TypeAndRef
+typeFromEnv pos key = do
+    Env env <- ES.get
+    case M.lookup key env of
+        Nothing -> EE.throwExc $ NotFound pos key
+        Just t  -> return t
+
+-- | 何に何を適用すると何が帰ってくるか
+typeApply :: (E.Member (EE.Exc TypeError) r)
+          => Type -- 何に
+          -> Type -- 何を
+          -> E.Eff r Type
+typeApply (Arr p t1 t1') t2 = if t1 == t2 
+    then return t1'
+    else EE.throwExc $ NotMatch p t1 t2
+
+-- | 環境を更新
+updateEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
+                   => String -- 何に
+                   -> Type   -- 何を適用したか
+                   -> E.Eff r Void
+updateEnv ref ty = undefined
 
 typeCheck :: [N.Expr]
           -> E.Eff (EE.Exc TypeError :> Void) Bool
+typeCheck exprs = undefined
+
+{-
 typeCheck exprs = let
     env      = inspectGlobEnv exprs                   :: Env
     localEnv = M.mapWithKey (\k v -> Local k 0 v) env :: LocalEnv
