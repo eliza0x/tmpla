@@ -11,6 +11,9 @@ Stability   : experimental
 木構造の式を展開する、第一段階の中間表現
 -}
 
+module KNormal where
+
+{-
 module KNormal(
       KBlock(..)
     , KNormal(..)
@@ -33,12 +36,12 @@ type Label = String
 data KBlock = KBlock 
     { pos  :: P.SourcePos
     , name :: Label
-    , args :: [Label]
     , body :: [KNormal]
     } deriving Eq
 
 data KNormal =
-      Let   P.SourcePos Var [KBlock] [KNormal]
+      Lambda P.SourcePos Var [KNormal]
+    | Let   P.SourcePos Var [KBlock] [KNormal]
     | If    P.SourcePos Var [KNormal] [KNormal] [KNormal]
     | Add   P.SourcePos Var Var Var
     | Sub   P.SourcePos Var Var Var 
@@ -57,27 +60,28 @@ data KNormal =
     deriving Eq
 
 instance Show KBlock where
-    show (KBlock _ n as b) = n ++ " " ++ unwords as ++ " {\n" ++ unlines (map (\x->tab++show x) b) ++ "}\n"
+    show (KBlock _ n b) = n ++ " {\n" ++ unlines (map (\x->tab++show x) b) ++ "}\n"
 
 tab :: String
 tab = L.replicate 4 ' '
 
 instance Show KNormal where
-    show (Add   _ result var var') = concat [cut result, " := ", cut var, " + ",  cut var', ";"]
-    show (Sub   _ result var var') = concat [cut result, " := ", cut var, " - ",  cut var', ";"]
-    show (Mul   _ result var var') = concat [cut result, " := ", cut var, " * ",  cut var', ";"]
-    show (Div   _ result var var') = concat [cut result, " := ", cut var, " / ",  cut var', ";"]
-    show (Eq    _ result var var') = concat [cut result, " := ", cut var, " = ",  cut var', ";"]
-    show (Ne    _ result var var') = concat [cut result, " := ", cut var, " /= ", cut var', ";"]
-    show (Gt    _ result var var') = concat [cut result, " := ", cut var, " > ",  cut var', ";"]
-    show (Lt    _ result var var') = concat [cut result, " := ", cut var, " < ",  cut var', ";"]
-    show (App   _ result var vars) = concat [cut result, " := ", cut var, "(", L.intercalate ", " (map cut vars), ");"]
-    show (Call  _ result label)    = result ++ " := call " ++ label
-    show (KNormal.True  _ result)  = cut result ++ " := true;"
-    show (KNormal.False _ result)  = cut result ++ " := false;"
-    show (Num   _ result n)        = result ++ " := " ++ show n ++ ";"
-    show (Label _ result label)    = result ++ " := " ++ label ++ ";"
-    show (If    _ result bool norm norm') = 
+    show (Add    _ result var var') = concat [cut result, " := ", cut var, " + ",  cut var', ";"]
+    show (Sub    _ result var var') = concat [cut result, " := ", cut var, " - ",  cut var', ";"]
+    show (Mul    _ result var var') = concat [cut result, " := ", cut var, " * ",  cut var', ";"]
+    show (Div    _ result var var') = concat [cut result, " := ", cut var, " / ",  cut var', ";"]
+    show (Eq     _ result var var') = concat [cut result, " := ", cut var, " = ",  cut var', ";"]
+    show (Ne     _ result var var') = concat [cut result, " := ", cut var, " /= ", cut var', ";"]
+    show (Gt     _ result var var') = concat [cut result, " := ", cut var, " > ",  cut var', ";"]
+    show (Lt     _ result var var') = concat [cut result, " := ", cut var, " < ",  cut var', ";"]
+    show (App    _ result var vars) = concat [cut result, " := ", cut var, "(", L.intercalate ", " (map cut vars), ");"]
+    show (Call   _ result label)    = result ++ " := call " ++ label
+    show (KNormal.True  _ result)   = cut result ++ " := true;"
+    show (KNormal.False _ result)   = cut result ++ " := false;"
+    show (Num    _ result n)        = cut result ++ " := " ++ show n ++ ";"
+    show (Lambda _ result t)        = "\\" ++ result ++ "->\n" ++ unlines (map (\x->tab++tab++show x) t)
+    show (Label  _ result label)    = cut result ++ " := " ++ cut label ++ ";"
+    show (If     _ result bool norm norm') = 
         cut result ++ " := if {\n" ++ unlines (map (\x->tab++show x) bool) 
         ++ "} then {\n" 
         ++ unlines (map (\x->tab++show x) norm)
@@ -100,17 +104,20 @@ returnTag = Tag "_return"
 
 knormalize :: [P.Expr] -> IO [KBlock]
 knormalize = mapM (\expr -> case expr of
-    P.Define p n as b -> KBlock p n as <$> knormalizeOfTerm b
-    P.TypeDef{}       -> error "ERROR: KNormal.hs, knormalize")
+    -- TODO: 引数をラムダ式に展開する
+    P.Define p n as b -> KBlock p n . expandArg p as <$> knormalizeOfTerm (returnTag b)
+    P.TypeDef{}       -> error "[INTERNAL ERROR] KNormal.hs: knormalize")
     . filter isDefine
     where
+    expandArg :: P.SourcePos -> [String] -> [KNormal] -> [KNormal]
+    expandArg p as term = foldr (\a l->[Lambda p a l]) term as
     isDefine :: P.Expr -> Bool
     isDefine P.Define{} = Prelude.True
     isDefine _          = Prelude.False
 
-knormalizeOfTerm :: P.Term -> IO [KNormal]
+knormalizeOfTerm :: NameTag P.Term -> IO [KNormal]
 knormalizeOfTerm term = L.reverse 
-    <$> (execWriterT . knormWriter . returnTag) term
+    <$> (execWriterT . knormWriter) term
 
 knormWriter :: NameTag P.Term -> WriterT [KNormal] IO ()
 knormWriter (Tag n term) = do
@@ -131,14 +138,17 @@ knormWriter (Tag n term) = do
         P.Label p str    -> tell [Label p n str]
         P.Let   p defs norms -> do
             defk <- lift $ knormalize defs
-            knorms <- lift $ knormalizeOfTerm norms
+            knorms <- lift $ knormalizeOfTerm (returnTag norms)
             tell [Let p n defk knorms]
         P.If    p b t t' -> do
-            bool   <- lift $ knormalizeOfTerm b
-            knorm  <- lift $ knormalizeOfTerm t
-            knorm' <- lift $ knormalizeOfTerm t'
+            bool   <- lift $ knormalizeOfTerm (returnTag b)
+            knorm  <- lift $ knormalizeOfTerm (returnTag t)
+            knorm' <- lift $ knormalizeOfTerm (returnTag t')
             tell [If p n bool knorm knorm']
         P.App  p label ts  -> do 
             uuids <- lift $ mapM (const U.genUUID) [1..length ts]
             tell [App p n label uuids] >> mapM_ (knormWriter . Tag uuid) ts
-        -- T.Call p t     -> tell [Call p n t]
+        P.Lambda p arg _ ts -> do
+            ks <- lift $ knormalizeOfTerm (Tag arg ts)
+            tell [Lambda p arg ks]
+-}

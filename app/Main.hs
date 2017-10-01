@@ -1,12 +1,16 @@
 module Main where
 
 import Parser
+import PNormal
 import Type
-import KNormal
+-- import KNormal
 -- import Emitter
 
 import System.Environment (getArgs)
-import Control.Monad (when)
+import Data.Either (isRight)
+-- import Control.Monad (when)
+import qualified Control.Eff as E
+import qualified Control.Eff.Exception as EE
 
 main :: IO ()
 main = do
@@ -19,12 +23,16 @@ main = do
     putStrLn "Parse"
     mapM_ print exprs
     putStrLn "---------------"
+    putStrLn "PNormal"
+    let pnorm = pnormalize exprs
+    print pnorm
+    putStrLn "---------------"
     putStrLn "Type Check"
-    let typed = typeCheck exprs
-    putStrLn $ if typed then "OK" else "Bad"
-    when typed $ do
-        putStrLn "---------------"
-        putStrLn "KNormal\n"
-        knorms <- knormalize exprs
-        putStrLn . unlines . map show $ knorms
+    let typed = E.run . EE.runExc $ typeCheck pnorm
+    putStrLn $ if isRight typed then "OK" else error $ show typed
+    -- when typed $ do
+    --     putStrLn "---------------"
+    --     putStrLn "KNormal\n"
+    --     knorms <- knormalize exprs
+    --     putStrLn . unlines . map show $ knorms
 

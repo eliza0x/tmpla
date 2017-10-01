@@ -1,7 +1,3 @@
-module Util
-    ( genUUID
-    ) where
-
 {- |
 Module      : Util
 Description : 便利ツールズ
@@ -11,6 +7,9 @@ Maintainer  : me@eliza.link
 Stability   : experimental
 -}
 
+module Util
+    ( genUUID
+    ) where
 
 import qualified Data.UUID as U
 import qualified Data.UUID.V4 as U

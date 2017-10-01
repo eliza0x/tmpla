@@ -33,21 +33,22 @@ data Expr = Define { pos  :: SourcePos
                     , args :: [String]
                     } deriving Eq
 
-data Term = Add   SourcePos Term Term
-          | Sub   SourcePos Term Term
-          | Mul   SourcePos Term Term
-          | Div   SourcePos Term Term
-          | App   SourcePos String [Term]
-          | Eq    SourcePos Term Term
-          | Ne    SourcePos Term Term
-          | Gt    SourcePos Term Term
-          | Lt    SourcePos Term Term
-          | If    SourcePos Term Term Term
-          | True  SourcePos
-          | False SourcePos
-          | Num   SourcePos Int
-          | Label SourcePos String
-          | Let   SourcePos [Expr] Term
+data Term = Add    SourcePos Term Term
+          | Sub    SourcePos Term Term
+          | Mul    SourcePos Term Term
+          | Div    SourcePos Term Term
+          | App    SourcePos String [Term]
+          | Eq     SourcePos Term Term
+          | Ne     SourcePos Term Term
+          | Gt     SourcePos Term Term
+          | Lt     SourcePos Term Term
+          | If     SourcePos Term Term Term
+          | True   SourcePos
+          | False  SourcePos
+          | Num    SourcePos Int
+          | Label  SourcePos String
+          | Let    SourcePos [Expr] Term
+          | Lambda SourcePos String Term
           deriving (Eq)
 
 instance Show Expr where
@@ -55,21 +56,22 @@ instance Show Expr where
     show (TypeDef _ n as)  = "TypeDef " ++ n ++ " " ++ show as
 
 instance Show Term where
-    show (Add _ t t')   = "Add " ++ show t ++ " " ++ show t'
-    show (Sub _ t t')   = "Sub " ++ show t ++ " " ++ show t'
-    show (Mul _ t t')   = "Mul " ++ show t ++ " " ++ show t'
-    show (Div _ t t')   = "Div " ++ show t ++ " " ++ show t'
-    show (App _ l ts)   = "App " ++ l ++ " " ++ show ts
-    show (Eq  _ t t')   = "Eq  " ++ show t ++ " " ++ show t'
-    show (Ne  _ t t')   = "Ne  " ++ show t ++ " " ++ show t'
-    show (Gt  _ t t')   = "Gt  " ++ show t ++ " " ++ show t'
-    show (Lt  _ t t')   = "Lt  " ++ show t ++ " " ++ show t'
-    show (If  _ b t t') = "If  " ++ show b ++ " " ++ show t ++ " " ++ show t'
+    show (Add _ t t')     = "Add " ++ show t ++ " " ++ show t'
+    show (Sub _ t t')     = "Sub " ++ show t ++ " " ++ show t'
+    show (Mul _ t t')     = "Mul " ++ show t ++ " " ++ show t'
+    show (Div _ t t')     = "Div " ++ show t ++ " " ++ show t'
+    show (App _ l ts)     = "App " ++ l ++ " " ++ show ts
+    show (Eq  _ t t')     = "Eq  " ++ show t ++ " " ++ show t'
+    show (Ne  _ t t')     = "Ne  " ++ show t ++ " " ++ show t'
+    show (Gt  _ t t')     = "Gt  " ++ show t ++ " " ++ show t'
+    show (Lt  _ t t')     = "Lt  " ++ show t ++ " " ++ show t'
+    show (If  _ b t t')   = "If  " ++ show b ++ " " ++ show t ++ " " ++ show t'
     show (Parser.True  _) = "True"
     show (Parser.False _) = "False"
-    show (Num _ n)      = show n
-    show (Label _ l)    = l
-    show (Let _ exprs t) = "Let " ++ show exprs ++ show t
+    show (Num _ n)        = show n
+    show (Label _ l)      = l
+    show (Let _ exprs t)  = "Let " ++ show exprs ++ show t
+    show (Lambda _ l t)   = "\\" ++ show l ++ " -> " ++ show t
 
 getPos :: Term -> SourcePos
 getPos (Add   p _ _)    = p
@@ -87,7 +89,7 @@ getPos (Parser.False p) = p
 getPos (Num   p _)      = p
 getPos (Label p _)      = p
 getPos (Let   p _ _)    = p
-
+getPos (Lambda p _ _)   = p
 
 type TmplaParser = Parsec Dec String
 
@@ -142,6 +144,7 @@ term'' = try (do
 
 term''' :: TmplaParser Term
 term''' = space *> ( brace 
+                 <|> lambda
                  <|> letIn
                  <|> ifParser
                  <|> app 
@@ -159,7 +162,14 @@ term''' = space *> ( brace
 
     app :: TmplaParser Term
     app = try $ App <$> getPosition <*> lowerWord <*> (some term <* space)
-   
+
+    lambda :: TmplaParser Term
+    lambda = do
+        p <- getPosition
+        as <- char '\\' *> many (space *> lowerWord) <* space <* string "->" <* space
+        t <- term
+        return $ foldr (Lambda p) t as 
+    
     brace :: TmplaParser Term
     brace = between (char '(') (char ')') term
 
