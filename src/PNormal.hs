@@ -66,7 +66,6 @@ instance Show Term where
     show (Let _ exprs t)  = "Let " ++ show exprs ++ " in " ++ show t
     show (Lambda _ l _ tr)   = "\\" ++ show l ++ " -> " ++ show tr
 
-
 type Type = String
 type Env = M.Map String [Type]
 
@@ -80,6 +79,7 @@ pnormalize exprs = map (pnorm (foldr genEnv M.empty $ filter (not . isDefine) ex
 
     genEnv :: P.Expr -> Env -> Env
     genEnv (P.TypeDef _ n as) = M.insert n as
+    genEnv _                  = undefined
 
     pnorm :: Env -> P.Expr -> Expr
     pnorm env (P.Define p n as b) = let 
@@ -88,6 +88,7 @@ pnormalize exprs = map (pnorm (foldr genEnv M.empty $ filter (not . isDefine) ex
         in Define p n
          $ foldr ($) (preNormTerm b)
          $ zipWith (Lambda p) as types
+    pnorm _ _ = undefined
 
 preNormTerm :: P.Term -> Term
 preNormTerm term = case term of

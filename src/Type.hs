@@ -26,51 +26,55 @@ import qualified Control.Eff.Exception as EE
 import qualified Control.Eff.State.Lazy as ES
 import qualified Data.Typeable as T
 
--- import qualified Control.Monad as C
--- import qualified Data.List as L
-import Data.Maybe (fromMaybe)
+import qualified Control.Monad as C
+import qualified Data.List as L
+-- import Data.Functor (Functor)
+-- import Data.Maybe (fromMaybe)
 
-newtype Env = Env (M.Map String TypeAndRef)
+type Env = M.Map String TypeAndRef
 
--- TODO: 参照と型の直和
+-- | 参照と型の直和
 data TypeAndRef = TypeAndRef { ref    :: Maybe String
                              , typeOf :: Type
                              } deriving (Show, Eq)
 
 -- | エラー型
-data TypeError = NotMatch{  pos :: P.SourcePos, ans  :: Type, actual :: Type } -- ^ 目当てのものと違う型が来ている
-               | DiffTypes{ pos :: P.SourcePos, type1:: Type, type2  :: Type } -- ^ 異なった型のものを比較している
-               | CanNotApply { pos :: P.SourcePos, type1 :: Type, type2 :: Type } -- ^ 不可能な型を適用しようとしている
-               | NotFound { pos :: P.SourcePos, key :: String } -- ^ 存在しない何かを呼んでいる
-               deriving (Show, Eq, T.Typeable)
+data TypeError = 
+      NotMatch{ ans  :: Type, actual :: Type } -- ^ 目当てのものと違う型が来ている
+    | DiffTypes{ type1:: Type, type2  :: Type } -- ^ 異なった型のものを比較している
+    | CanNotApply { type1 :: Type, type2 :: Type } -- ^ 不可能な型を適用しようとしている
+    | NotFound { pos :: P.SourcePos, key :: String } -- ^ 存在しない何かを呼んでいる
+    deriving (Show, Eq, T.Typeable)
 
 -- TODO: #2 本当はTermから一意に定まるようになっているほうがいい気がする
 data Type = Int     P.SourcePos
           | Bool    P.SourcePos
           | Unknown P.SourcePos
-          | Arr     P.SourcePos Type Type
+          | Arr     P.SourcePos [Type]
 
 instance Show Type where
     show (Int _)       = "Int"
     show (Bool _)      = "Bool"
     show (Unknown _)   = "Unknown"
-    show (Arr _ t t')  = show t ++ " -> " ++ show t'
+    show (Arr _ ts)  = L.intercalate " -> " $ map show ts
 
 instance Eq Type where
-    Int{}        == Int{}        = True
-    Bool{}       == Bool{}       = True
-    Unknown{}    == _            = True
-    Arr _ t1 t1' == Arr _ t2 t2' = t1 == t2 && t1' == t2'
-    Int{}        == _            = False
-    Bool{}       == _            = False
-    Arr{}        == _            = False
-
+    Int{}     == Int{}      = True
+    Bool{}    == Bool{}     = True
+    Unknown{} == _          = True
+    Arr _ ts  == Arr _ ts'  = and $ zipWith (==) ts ts'
+    Int{}     == _          = False
+    Bool{}    == _          = False
+    Arr{}     == _          = False
+ 
+-- | 環境から型を持って来る
+-- なければ死ぬ
 typeFromEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
             => P.SourcePos
             -> String
             -> E.Eff r TypeAndRef
 typeFromEnv pos key = do
-    Env env <- ES.get
+    env <- ES.get
     case M.lookup key env of
         Nothing -> EE.throwExc $ NotFound pos key
         Just t  -> return t
@@ -80,16 +84,48 @@ typeApply :: (E.Member (EE.Exc TypeError) r)
           => Type -- 何に
           -> Type -- 何を
           -> E.Eff r Type
-typeApply (Arr p t1 t1') t2 = if t1 == t2 
-    then return t1'
-    else EE.throwExc $ NotMatch p t1 t2
+typeApply t t' = do
+    case t of
+        (Int p)     -> EE.throwExc $ CanNotApply (Int p)  t' 
+        (Bool p)    -> EE.throwExc $ CanNotApply (Bool p) t' 
+        (Unknown p) -> return $ Unknown p
+        (Arr p ts)  -> if head ts == t
+            then return . Arr p $ tail ts
+            else EE.throwExc $ NotMatch (head ts) t
 
 -- | 環境を更新
-updateEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-                   => String -- 何に
-                   -> Type   -- 何を適用したか
-                   -> E.Eff r Void
-updateEnv ref ty = undefined
+updateEnv :: (E.Member (ES.State Env) r)
+          => TypeAndRef
+          -> [Type]
+          -> E.Eff r ()
+updateEnv tar ts = undefined
+
+-- | 未確定の型を確定させる
+settleType :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
+           => P.SourcePos
+           -> String
+           -> [Type]
+           -> E.Eff r ()
+settleType pos key args = do
+    TypeAndRef ref t <- typeFromEnv pos key
+    tar' <- TypeAndRef ref <$> settle t args
+    ES.modify $ M.insert key tar'
+    where
+    settle :: (E.Member (EE.Exc TypeError) r)
+          => Type
+          -> [Type]
+          -> E.Eff r Type
+    settle (Arr p ts) ts' = do
+        C.when (length ts < length ts') 
+            $ EE.throwExc p (CanNotApply (Arr p ts) (Arr p ts'))
+        return $ Arr p (ts' ++ drop (length ts') ts)
+{-
+updateEnv pos key ty = do
+    TypeAndRef ref typeOf <- typeFromEnv pos key
+    case typeOf of
+        Arr ap (Unknown up) x -> ES.modify 
+            (M.insert key . TypeAndRef ref $ Arr ap ty x)
+-}
 
 typeCheck :: [N.Expr]
           -> E.Eff (EE.Exc TypeError :> Void) Bool
