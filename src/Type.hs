@@ -89,72 +89,14 @@ typeApply t t' = do
         (Int p)     -> EE.throwExc $ CanNotApply (Int p)  t' 
         (Bool p)    -> EE.throwExc $ CanNotApply (Bool p) t' 
         (Unknown p) -> return $ Unknown p
-        (Arr p ts)  -> if head ts == t
-            then return . Arr p $ tail ts
-            else EE.throwExc $ NotMatch (head ts) t
-
--- | 環境を更新
-updateEnv :: (E.Member (ES.State Env) r)
-          => TypeAndRef
-          -> [Type]
-          -> E.Eff r ()
-updateEnv tar ts = undefined
-
--- | 未確定の型を確定させる
-settleType :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-           => P.SourcePos
-           -> String
-           -> [Type]
-           -> E.Eff r ()
-settleType pos key args = do
-    TypeAndRef ref t <- typeFromEnv pos key
-    tar' <- TypeAndRef ref <$> settle t args
-    ES.modify $ M.insert key tar'
-    where
-    settle :: (E.Member (EE.Exc TypeError) r)
-          => Type
-          -> [Type]
-          -> E.Eff r Type
-    settle (Arr p ts) ts' = do
-        C.when (length ts < length ts') 
-            $ EE.throwExc p (CanNotApply (Arr p ts) (Arr p ts'))
-        return $ Arr p (ts' ++ drop (length ts') ts)
-{-
-updateEnv pos key ty = do
-    TypeAndRef ref typeOf <- typeFromEnv pos key
-    case typeOf of
-        Arr ap (Unknown up) x -> ES.modify 
-            (M.insert key . TypeAndRef ref $ Arr ap ty x)
--}
+        (Arr p ts)  -> case (head ts == t', length ts == 2) of
+            (True, True)  -> return $ last ts
+            (True, False) -> return . Arr p $ tail ts
+            (False, _)    -> EE.throwExc $ NotMatch (head ts) t'
 
 typeCheck :: [N.Expr]
           -> E.Eff (EE.Exc TypeError :> Void) Bool
 typeCheck exprs = undefined
-
-{-
-typeCheck exprs = let
-    env      = inspectGlobEnv exprs                   :: Env
-    localEnv = M.mapWithKey (\k v -> Local k 0 v) env :: LocalEnv
-    isDefine N.Define{}  = True
-    isDefine N.TypeDef{} = False
-    in and <$> ES.evalState env 
-    (mapM (compareType localEnv) $ filter isDefine exprs :: E.Eff (ES.State Env :> EE.Exc TypeError :> Void) [Bool])
-
-compareType :: (E.Member (ES.State Env) r, E.Member (EE.Exc TypeError) r)
-               => LocalEnv
-               -> N.Expr 
-               -> E.Eff r Bool
-compareType localEnv (N.Define p n b) = do
-    env <- M.lookup n ES.get
-    return undefined
-
-evalExpr :: ( E.Member (ES.State LocalEnv) r -- ^ ローカル変数を管理する
-            , E.Member (ES.State Env) r      -- ^ グローバル変数を管理する、不定項は処理に応じて書き換えられていく
-            , E.Member (EE.Exc TypeError) r)
-         => N.Expr
-         -> E.Eff r Type
-evalExpr = undefined
-
 
 {-
 eval :: (EE.MonadThrow m) => Env -> N.Term -> m Type
