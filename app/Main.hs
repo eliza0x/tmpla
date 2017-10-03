@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeOperators #-}
+
 module Main where
 
 import Parser
@@ -12,6 +14,8 @@ import Data.Either (isRight)
 -- import Control.Monad (when)
 import qualified Control.Eff as E
 import qualified Control.Eff.Exception as EE
+import Control.Eff ((:>))
+import Data.Void (Void)
 
 main :: IO ()
 main = do
@@ -32,10 +36,10 @@ main = do
     let al = alpha pnorm
     print al
   
-    -- putStrLn "---------------"
-    -- putStrLn "Type Check"
-    -- let typed = E.run . EE.runExc $ typeCheck pnorm
-    -- putStrLn $ if isRight typed then "OK" else error $ show typed
+    putStrLn "---------------"
+    putStrLn "Type Check"
+    let typed = E.run . EE.runExc $ (typeCheck pnorm :: E.Eff (EE.Exc TypeCheckError :> Void) Env)
+    print typed
     -- when typed $ do
     --     putStrLn "---------------"
     --     putStrLn "KNormal\n"
