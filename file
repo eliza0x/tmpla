@@ -1,0 +1,1 @@
+E.run $ EE.runExc $ ES.execState (Env M.empty M.empty) (inspectGlobEnv [expr] :: E.Eff (ES.State Env :> EE.Exc TypeError :> Void) ())

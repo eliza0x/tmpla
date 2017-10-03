@@ -16,45 +16,44 @@ module Type where
  
 import qualified Parser as P
 import qualified PNormal as N
-import qualified Util as U
 
 import qualified Data.Map.Strict as M
--- import Data.Void (Void)
+import Data.Void (Void)
 
 import qualified Control.Eff as E
 import Control.Eff ((:>))
 import qualified Control.Eff.Exception as EE
 import qualified Control.Eff.State.Lazy as ES
-import qualified Control.Eff.Lift as EL
 import qualified Data.Typeable as T
 
 import qualified Control.Monad as C
-import Control.Monad ((<=<))
 import qualified Data.List as L
 -- import Data.Functor (Functor)
-import Data.Maybe (fromMaybe, isJust, isNothing, fromJust)
+import Data.Maybe (fromMaybe, isNothing, fromJust)
 
 -- | エラー型
 data TypeError = 
-      NotMatch{ ans  :: BaseType, actual :: BaseType } -- ^ 目当てのものと違う型が来ている
-    | DiffTypes{ type1:: BaseType, type2  :: BaseType } -- ^ 異なった型のものを比較している
-    | CanNotApply { type1 :: BaseType, type2 :: BaseType } -- ^ 不可能な型を適用しようとしている
+      NotMatch{ ans  :: Type, actual :: Type } -- ^ 目当てのものと違う型が来ている
+    | DiffTypes{ type1:: Type, type2  :: Type } -- ^ 異なった型のものを比較している
+    | CanNotApply { type1 :: Type, type2 :: Type } -- ^ 不可能な型を適用しようとしている
     | NotFound { key :: String } -- ^ 存在しない何かを呼んでいる
     deriving (Show, Eq, T.Typeable)
 
 -- | 環境、二層にすることで参照を表現
-data Env = Env { id2typeval   :: M.Map String [String] 
-               , typeval2type :: M.Map String BaseType
+data Env = Env { id2typeval   :: M.Map String String 
+               , typeval2type :: M.Map String Type
                } deriving (Show, Eq)
 
-type TypeEnv = M.Map String [BaseType]
+-- | 型の外形を表現
+data TypeShape = Arr TypeShape TypeShape
+               | SomeType String -- uuid
+               deriving (Show, Eq)
 
 -- | 基本型
-data BaseType = Int
-              | Bool
-              | Unk
-              | Arr BaseType BaseType
-    deriving (Show, Eq)
+data Type = Int
+          | Bool
+          | Unk
+        deriving (Show, Eq)
 
 lookup :: (E.Member (EE.Exc TypeError) r)
        => String
@@ -66,62 +65,74 @@ lookup key map = do
     return $ fromJust val
 
 get :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-    => String -- ^ uuid
-    -> E.Eff r BaseType
-get = getType . head <=< getMiddleId
+    => String -- uuid
+    -> E.Eff r Type
+get = getType =<< getMiddleId
 
 getMiddleId :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-           => String -- ^ uuid
-           -> E.Eff r [String]
-getMiddleId id = Type.lookup id . id2typeval =<< ES.get
+           => String -- uuid
+           -> E.Eff r String
+getMiddleId id = do
+    env <- ES.get
+    Type.lookup id $ id2typeval env
 
 getType :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
            => String -- uuid
-           -> E.Eff r BaseType
-getType middleId = Type.lookup middleId . typeval2type =<< ES.get
-
-update :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-       => String -- uuid
-       -> [BaseType]
-       -> E.Eff r ()
-update id types = do
-    targetMiddleIds <- getMiddleId id
+           -> E.Eff r Type
+getType id = do
     env <- ES.get
-    let typeval2typeEnv = typeval2type env
-    let typeval2type' = foldr (\(k, v) env->M.insert k v env) typeval2typeEnv $ zip targetMiddleIds types
-    ES.put $ env { typeval2type = typeval2type' }
+    middleId <- Type.lookup id $ id2typeval env
+    Type.lookup middleId $ typeval2type env
 
-updateType :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-           => String -- middle uuid
-           -> BaseType
-           -> E.Eff r ()
-updateType id ty = do
-    env <- ES.get
-    let prevTy = M.lookup id . typeval2type $ env :: Maybe BaseType
+update :: (E.Member (ES.State Env) r)
+           => String -- uuid
+           -> Type
+           -> E.Eff r Type
+updateid ty = undefined
 
-    -- 矛盾が生じると死亡
-    C.when (isJust prevTy) . C.when (fromJust prevTy /= ty) . EE.throwExc $ NotMatch (fromJust prevTy) ty
+updateMiddleId :: (E.Member (ES.State Env) r)
+               => String -- uuid
+               -> String -- middle Id
+               -> E.Eff r String
+updateMiddleId id ty = undefined
 
-    let typeval2type' = M.insert id ty . typeval2type $ env
-    ES.put $ env { typeval2type = typeval2type' }
-
-inspectGlobEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-               => [N.Expr]
-               -> E.Eff r ()
-inspectGlobEnv exprs =
-    C.forM_ exprs $ \(N.Define pos name body) -> do
-        id2typeval'   <- M.insert name [name] . id2typeval  <$> ES.get
-        typeval2type' <- M.insert name Unk    . typeval2type <$> ES.get
-        ES.put $ Env id2typeval' typeval2type'
-
-typeCheck :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r, E.SetMember EL.Lift (EL.Lift IO) r)
-          => [N.Expr]
-          -> E.Eff r TypeEnv
-typeCheck exprs = do
-    inspectGlobEnv exprs
-    undefined
-
+updateType :: (E.Member (ES.State Env) r)
+           => String -- uuid
+           -> Type
+           -> E.Eff r Type
+updateType id ty = 
 {-
+-- | 環境から型を持って来る
+-- なければ死ぬ
+typeFromEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
+            => P.SourcePos
+            -> String
+            -> E.Eff r TypeAndRef
+typeFromEnv pos key = do
+    env <- ES.get
+    case M.lookup key env of
+        Nothing -> EE.throwExc $ NotFound pos key
+        Just t  -> return t
+
+-- | 何に何を適用すると何が帰ってくるか
+typeApply :: (E.Member (EE.Exc TypeError) r)
+          => Type -- 何に
+          -> Type -- 何を
+          -> E.Eff r Type
+typeApply t t' = do
+    case t of
+        (Int p)     -> EE.throwExc $ CanNotApply (Int p)  t' 
+        (Bool p)    -> EE.throwExc $ CanNotApply (Bool p) t' 
+        (Unknown p) -> return $ Unknown p
+        (Arr p ts)  -> case (head ts == t', length ts == 2) of
+            (True, True)  -> return $ last ts
+            (True, False) -> return . Arr p $ tail ts
+            (False, _)    -> EE.throwExc $ NotMatch (head ts) t'
+
+typeCheck :: [N.Expr]
+          -> E.Eff (EE.Exc TypeError :> Void) Bool
+typeCheck exprs = undefined
+
 eval :: (EE.MonadThrow m) => Env -> N.Term -> m Type
 eval env term = case term of
     N.Add p t t'  -> arith p t t'
@@ -160,5 +171,6 @@ eval env term = case term of
     isInt :: (EE.MonadThrow m) => P.SourcePos -> N.Term -> m Bool
     isInt p t'' = (== Int p) <$> eval env t''
 
+inspectGlobEnv :: [N.Expr] -> Env
+inspectGlobEnv = undefined
 -}
-
