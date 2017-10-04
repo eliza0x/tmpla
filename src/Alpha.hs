@@ -38,7 +38,7 @@ alphaT prefix env term = case term of
                         . fromMaybe (error "[INTERNAL ERROR] Alpha.hs alphaT") 
                         $ M.lookup l env
     P.Lambda p l ty tr -> P.Lambda p (prefix++"#"++l) ty $ alphaT (prefix++"#"++l) (M.insert l (prefix++"#"++l) env) tr
-    P.App    p l ts    -> P.App p l $ map (alphaT prefix env) ts
+    P.App    p t t'    -> P.App p (alphaT prefix env t) (alphaT prefix env t')
     P.Let    p es t    -> let
         env' = inspectEnv prefix env es
         in P.Let p (alpha' prefix env' es) (alphaT prefix env' t)

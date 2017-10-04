@@ -9,156 +9,219 @@ License     : MIT
 Maintainer  : me@eliza.link
 Stability   : experimental
 
-静的型検査をする。型推論は出来ないので明示的に型を書く必要がある。
+静的型検査をする。
 -}
 
-module Type where
+module Type (
+      TypeCheckError(..)
+    , typeCheck
+    , Env
+    ) where
  
 import qualified Parser as P
 import qualified PNormal as N
-import qualified Util as U
+-- import qualified Util as U
 
 import qualified Data.Map.Strict as M
--- import Data.Void (Void)
+import Data.Maybe
 
+-- extensible effects
 import qualified Control.Eff as E
-import Control.Eff ((:>))
-import qualified Control.Eff.Exception as EE
+import qualified Control.Eff.Exception as EX
 import qualified Control.Eff.State.Lazy as ES
-import qualified Control.Eff.Lift as EL
-import qualified Data.Typeable as T
+-- import qualified Control.Eff.Lift as EL
+-- import Control.Eff ((:>))
+-- import Data.Void (Void)
+import Data.Typeable (Typeable)
 
-import qualified Control.Monad as C
-import Control.Monad ((<=<))
-import qualified Data.List as L
--- import Data.Functor (Functor)
-import Data.Maybe (fromMaybe, isJust, isNothing, fromJust)
+data Type = TInt
+          | TBool
+          | TUnkL String
+          | TUnk
+          | Arr Type Type
+          deriving (Show, Eq)
 
 -- | エラー型
-data TypeError = 
-      NotMatch{ ans  :: BaseType, actual :: BaseType } -- ^ 目当てのものと違う型が来ている
-    | DiffTypes{ type1:: BaseType, type2  :: BaseType } -- ^ 異なった型のものを比較している
-    | CanNotApply { type1 :: BaseType, type2 :: BaseType } -- ^ 不可能な型を適用しようとしている
-    | NotFound { key :: String } -- ^ 存在しない何かを呼んでいる
-    deriving (Show, Eq, T.Typeable)
+data TypeCheckError =
+      TypeMismatch { actual :: Type, expected :: Type } -- ^ 期待していた型が来なかった場合
+    | DiffTypes { type1 :: Type, type2 :: Type }        -- ^ 比較演算子等で異なった型を比較しようとした時
+    | CanNotApply { type1 :: Type, type2 :: Type }      -- ^ 適用不可な値に値を適用している
+    | NotFound { key :: String }                        -- ^ 存在しない何かを呼んでいる
+    deriving (Show, Eq, Typeable)
 
--- | 環境、二層にすることで参照を表現
-data Env = Env { id2typeval   :: M.Map String [String] 
-               , typeval2type :: M.Map String BaseType
-               } deriving (Show, Eq)
+type Env = M.Map String Type
 
-type TypeEnv = M.Map String [BaseType]
-
--- | 基本型
-data BaseType = Int
-              | Bool
-              | Unk
-              | Arr BaseType BaseType
-    deriving (Show, Eq)
-
-lookup :: (E.Member (EE.Exc TypeError) r)
-       => String
-       -> M.Map String v
-       -> E.Eff r v
-lookup key map = do
-    let val = M.lookup key map
-    C.when (isNothing val) $ EE.throwExc (NotFound key)
-    return $ fromJust val
-
-get :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-    => String -- ^ uuid
-    -> E.Eff r BaseType
-get = getType . head <=< getMiddleId
-
-getMiddleId :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-           => String -- ^ uuid
-           -> E.Eff r [String]
-getMiddleId id = Type.lookup id . id2typeval =<< ES.get
-
-getType :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-           => String -- uuid
-           -> E.Eff r BaseType
-getType middleId = Type.lookup middleId . typeval2type =<< ES.get
-
-update :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-       => String -- uuid
-       -> [BaseType]
-       -> E.Eff r ()
-update id types = do
-    targetMiddleIds <- getMiddleId id
-    env <- ES.get
-    let typeval2typeEnv = typeval2type env
-    let typeval2type' = foldr (\(k, v) env->M.insert k v env) typeval2typeEnv $ zip targetMiddleIds types
-    ES.put $ env { typeval2type = typeval2type' }
-
-updateType :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-           => String -- middle uuid
-           -> BaseType
-           -> E.Eff r ()
-updateType id ty = do
-    env <- ES.get
-    let prevTy = M.lookup id . typeval2type $ env :: Maybe BaseType
-
-    -- 矛盾が生じると死亡
-    C.when (isJust prevTy) . C.when (fromJust prevTy /= ty) . EE.throwExc $ NotMatch (fromJust prevTy) ty
-
-    let typeval2type' = M.insert id ty . typeval2type $ env
-    ES.put $ env { typeval2type = typeval2type' }
-
-inspectGlobEnv :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r)
-               => [N.Expr]
-               -> E.Eff r ()
-inspectGlobEnv exprs =
-    C.forM_ exprs $ \(N.Define pos name body) -> do
-        id2typeval'   <- M.insert name [name] . id2typeval  <$> ES.get
-        typeval2type' <- M.insert name Unk    . typeval2type <$> ES.get
-        ES.put $ Env id2typeval' typeval2type'
-
-typeCheck :: (E.Member (EE.Exc TypeError) r, E.Member (ES.State Env) r, E.SetMember EL.Lift (EL.Lift IO) r)
+typeCheck :: (E.Member (EX.Exc TypeCheckError) r)
           => [N.Expr]
-          -> E.Eff r TypeEnv
-typeCheck exprs = do
-    inspectGlobEnv exprs
-    undefined
+          -> E.Eff r Env
+typeCheck exprs = evalExprs exprs 50 $ inspectExprs exprs M.empty
 
+-- 環境に関数の型推論の結果を追記している
+inspectExprs ::[N.Expr] -> Env -> Env
+inspectExprs exprs env = foldr (\(N.Define _ n _) -> M.insert n TUnk) env exprs
+
+-- | 型推論の結果が変化しなくなるまで再帰する
+-- 型検査は上から流しているだけなので一度では決定不能な項が存在する
+-- 始めに決定できない項を呼び出す項がだれだけ積んであるかで決定回数は決まる
+
+evalExprs :: (E.Member (EX.Exc TypeCheckError) r)
+          => [N.Expr] -- ^ 構文木
+          -> Int    -- ^ 再帰上限
+          -> Env    -- ^ 環境
+          -> E.Eff r Env
+evalExprs exprs iterNum env = do
+    env' <- ES.execState env $ mapM_ evalExpr exprs
+    case (env /= env', iterNum  > 1) of
+        (True, True)   -> evalExprs exprs (iterNum-1) env'
+        (True, False)  -> return env'
+        (False, _)     -> return env'
+    where
+    evalExpr :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+             => N.Expr
+             -> E.Eff r ()
+    evalExpr (N.Define _ n tm) = do
+        evaluated <- eval tm
+        ES.modify (M.insert n evaluated)
+
+eval :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+     => N.Term 
+     -> E.Eff r Type
+eval term = case term of
+    N.Add _ t t'        -> arith t t'
+    N.Sub _ t t'        -> arith t t'
+    N.Mul _ t t'        -> arith t t'
+    N.Div _ t t'        -> arith t t'
+    N.Eq  _ t t'        -> eqType t t'
+    N.Ne  _ t t'        -> eqType t t'
+    N.Gt  _ t t'        -> eqType t t'
+    N.Lt  _ t t'        -> eqType t t'
+    N.True  _           -> return TBool
+    N.False _           -> return TBool
+    N.Num _ _           -> return TInt
+    N.Label _ l         -> label l
+    N.App   _ t t'      -> app t t'
+    N.If _ b t t'       -> evalIf b t t'
+    N.Lambda _ n ty tr  -> lambda n (fromString ty) tr
+    N.Let _ exprs tr    -> do
+        env' <- evalExprs exprs 50 . inspectExprs exprs =<< ES.get
+        ES.put env'
+        eval tr
+    
+fromString :: String -> Type
+fromString str = case str of
+    "Int"  -> TInt
+    "Bool" -> TBool
+    _      -> TUnkL str
+
+-- | Int -> Int -> Int の算術演算を処理する
+arith :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+      => N.Term 
+      -> N.Term
+      -> E.Eff r Type
+arith t1 t1' = do
+    ty <- eval t1
+    ty' <- eval t1'
+    b  <- isInt ty
+    b' <- isInt ty'
+    case (b, b') of
+        (True,  True)  -> return TInt
+        (True,  False) -> EX.throwExc $ TypeMismatch ty' TInt
+        (False, True)  -> EX.throwExc $ TypeMismatch ty  TInt
+        (False, False) -> EX.throwExc $ TypeMismatch ty  TInt
+    where
+    isInt :: (E.Member (ES.State Env) r)
+          => Type -> E.Eff r Bool
+    isInt TInt      = return True
+    isInt TUnk      = return True
+    isInt (TUnkL l) = do
+        ES.modify (M.insert l TInt)
+        return True
+    isInt _         = return False
+
+-- | a -> a -> Bool の比較演算を処理する
+eqType :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+       => N.Term 
+       -> N.Term
+       -> E.Eff r Type
+eqType t t' = do
+    b  <- eval t
+    b' <- eval t'
+    updateEnv b b'
+    if b == b'
+        then return TBool    
+        else error $ "\""++show t++"\" and \""++show t'++"\" are diff types"
+    where
+    updateEnv :: (E.Member (ES.State Env) r)
+              => Type -> Type -> E.Eff r ()
+    updateEnv t1 t1' = case (labelFromType t1, labelFromType t1') of
+        (Just _, Just _)  -> return ()
+        (Just l, Nothing)  -> ES.modify (M.insert l t1')
+        (Nothing, Just l') -> ES.modify (M.insert l' t1)
+        (Nothing, Nothing) -> return ()
+    labelFromType :: Type -> Maybe String
+    labelFromType (TUnkL l) = Just l
+    labelFromType _         = Nothing
+
+-- | Labelを処理する
+label :: (E.Member (ES.State Env) r)
+      => String
+      -> E.Eff r Type
+label l = fromMaybe (TUnkL l) -- 環境に存在しない変数の場合ラベル付き未確定型を返す
+        . M.lookup l <$> ES.get
+
+-- | 適用を処理する
+app :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+    => N.Term 
+    -> N.Term 
+    -> E.Eff r Type
+app t t' = do
+    t1  <- eval t
+    t1' <- eval t'
+    appType t1 t1'
+    
+appType :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+        => Type
+        -> Type
+        -> E.Eff r Type
+appType t t' = case t of
+    TInt        -> EX.throwExc $ CanNotApply t t'
+    TBool       -> EX.throwExc $ CanNotApply t t'
+    TUnk        -> return TUnk
+    TUnkL l     -> do
+        t1 <- fromMaybe (Arr t' (TUnkL l)) . M.lookup l <$> ES.get
+        ES.modify (M.insert l t1)
+        return $ TUnkL l
+    Arr  t1 t1' -> if t1 == t' 
+        then return t1' 
+        else EX.throwExc $ CanNotApply t t'
+-- | 条件分岐を処理
+evalIf :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+       => N.Term
+       -> N.Term 
+       -> N.Term
+       -> E.Eff r Type
+evalIf b t t' = do
+    b1  <- eval b
+    t1  <- eval t
+    t1' <- eval t'
+    case (b1 == TBool, t1 == t1') of
+        (True,  True)  -> return t1
+        (False, True)  -> EX.throwExc $ TypeMismatch b1 TBool
+        (True,  False) -> EX.throwExc $ DiffTypes t1 t1'
+        (False, False) -> EX.throwExc $ DiffTypes t1 t1'
+
+-- | ラムダ式を処理
+lambda :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
+       => String
+       -> Type
+       -> N.Term
+       -> E.Eff r Type
+lambda l ty tr = do
+    ES.modify (M.insert l ty) -- 引数の型を環境に追加している
+    Arr ty <$> eval tr
+ 
 {-
-eval :: (EE.MonadThrow m) => Env -> N.Term -> m Type
-eval env term = case term of
-    N.Add p t t'  -> arith p t t'
-    N.Sub p t t'  -> arith p t t'
-    N.Mul p t t'  -> arith p t t'
-    N.Div p t t'  -> arith p t t'
-    N.Eq  p t t'  -> eq p t t'
-    N.Ne  p t t'  -> eq p t t'
-    N.Gt  p t t'  -> eq p t t'
-    N.Lt  p t t'  -> eq p t t'
-    N.True  p     -> return $ Bool p
-    N.False p     -> return $ Bool p
-    N.Num p _     -> return $ Int p
-    N.Label _ _   -> undefined -- TODO
-    N.If p b t t' -> undefined -- TODO
-    N.Let p es t  -> undefined -- TODO
-    N.App p t t'  -> undefined -- TODO
-    where 
-    eq :: (EE.MonadThrow m) => P.SourcePos -> N.Term -> N.Term -> m Type
-    eq p t t' = do
-        ty  <- eval env t
-        ty' <- eval env t'
-        if ty == ty'
-            then return $ Bool p
-            else EE.throwM $ DiffTypes p ty ty'
-
-    arith :: (EE.MonadThrow m) => P.SourcePos -> N.Term -> N.Term -> m Type
-    arith p t t' = do
-        ty  <- eval env t
-        ty' <- eval env t'
-        case (ty == Int p, ty' == Int p) of
-            (True, True)   -> return $ Int p
-            (False, _)  -> EE.throwM . NotMatch p ty' $ Int p
-            (_, False)  -> EE.throwM . NotMatch p ty  $ Int p
-
-    isInt :: (EE.MonadThrow m) => P.SourcePos -> N.Term -> m Bool
-    isInt p t'' = (== Int p) <$> eval env t''
-
+main :: IO ()
+main = print . E.run $ EX.runExc (typeCheck source :: E.Eff (EX.Exc TypeCheckError :> Void) Env)
 -}
 
