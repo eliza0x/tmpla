@@ -38,7 +38,7 @@ main = do
   
     putStrLn "---------------"
     putStrLn "Type Check"
-    let typed = E.run . EE.runExc $ (typeCheck pnorm :: E.Eff (EE.Exc TypeCheckError :> Void) Env)
+    let typed = E.run . EE.runExc $ (typeCheck al :: E.Eff (EE.Exc TypeCheckError :> Void) Env)
     print typed
     -- when typed $ do
     --     putStrLn "---------------"

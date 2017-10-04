@@ -12,11 +12,15 @@ Stability   : experimental
 静的型検査をする。
 -}
 
-module Type where
+module Type (
+      TypeCheckError(..)
+    , typeCheck
+    , Env
+    ) where
  
 import qualified Parser as P
 import qualified PNormal as N
-import qualified Util as U
+-- import qualified Util as U
 
 import qualified Data.Map.Strict as M
 import Data.Maybe
@@ -25,11 +29,10 @@ import Data.Maybe
 import qualified Control.Eff as E
 import qualified Control.Eff.Exception as EX
 import qualified Control.Eff.State.Lazy as ES
-import qualified Control.Eff.Lift as EL
-import Control.Eff ((:>))
-import Data.Void (Void)
+-- import qualified Control.Eff.Lift as EL
+-- import Control.Eff ((:>))
+-- import Data.Void (Void)
 import Data.Typeable (Typeable)
-
 
 data Type = TInt
           | TBool
@@ -48,38 +51,14 @@ data TypeCheckError =
 
 type Env = M.Map String Type
 
-{-
-main = fact 5;
-fact = \n -> if n /= 0 then n * fact (n-1)
-                       else 1;
-source :: [Expr]
-source = [ Define "main" (Lambda "n" TBool 
-                            (Sub (Num 5) 
-                                 (Label "n")))
-         , Define "foo"  (Num 5)
-         ]
-
-source :: [N.Expr]
-source = [ N.Define "main" (App (Label "fact") (Num 5))
-         , N.Define "fact" (Lambda "n" TInt
-                            (If (Ne (Label "n")
-                                    (Num 0))
-                                (Mul (Label "n")
-                                     (App (Label "fact") (Sub (Label "n") (Num 1))))
-                                (Num 1)))
-         , N.Define "map" (Lambda "f" (Arr TInt TInt)
-                            (App (Label "f") (Num 5)))
-         ]
--}
-
 typeCheck :: (E.Member (EX.Exc TypeCheckError) r)
           => [N.Expr]
           -> E.Eff r Env
-typeCheck exprs = evalExprs exprs 50 $ inspectExprs exprs
-    where
-    -- 環境に関数の型推論の結果を追記している
-    inspectExprs :: [N.Expr] -> Env
-    inspectExprs = foldr (\(N.Define _ n _) -> M.insert n TUnk) M.empty
+typeCheck exprs = evalExprs exprs 50 $ inspectExprs exprs M.empty
+
+-- 環境に関数の型推論の結果を追記している
+inspectExprs ::[N.Expr] -> Env -> Env
+inspectExprs exprs env = foldr (\(N.Define _ n _) -> M.insert n TUnk) env exprs
 
 -- | 型推論の結果が変化しなくなるまで再帰する
 -- 型検査は上から流しているだけなので一度では決定不能な項が存在する
@@ -114,13 +93,19 @@ eval term = case term of
     N.Div _ t t'        -> arith t t'
     N.Eq  _ t t'        -> eqType t t'
     N.Ne  _ t t'        -> eqType t t'
+    N.Gt  _ t t'        -> eqType t t'
+    N.Lt  _ t t'        -> eqType t t'
     N.True  _           -> return TBool
     N.False _           -> return TBool
     N.Num _ _           -> return TInt
     N.Label _ l         -> label l
-    -- N.App   _ t t'      -> app t t'
+    N.App   _ t t'      -> app t t'
     N.If _ b t t'       -> evalIf b t t'
     N.Lambda _ n ty tr  -> lambda n (fromString ty) tr
+    N.Let _ exprs tr    -> do
+        env' <- evalExprs exprs 50 . inspectExprs exprs =<< ES.get
+        ES.put env'
+        eval tr
     
 fromString :: String -> Type
 fromString str = case str of

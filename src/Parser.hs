@@ -38,7 +38,7 @@ data Term = Add    SourcePos Term Term
           | Sub    SourcePos Term Term
           | Mul    SourcePos Term Term
           | Div    SourcePos Term Term
-          | App    SourcePos String [Term]
+          | App    SourcePos Term [Term]
           | Eq     SourcePos Term Term
           | Ne     SourcePos Term Term
           | Gt     SourcePos Term Term
@@ -63,7 +63,7 @@ instance Show Term where
     show (Sub _ t t')     = "Sub " ++ show t ++ " " ++ show t'
     show (Mul _ t t')     = "Mul " ++ show t ++ " " ++ show t'
     show (Div _ t t')     = "Div " ++ show t ++ " " ++ show t'
-    show (App _ l ts)     = "App " ++ l ++ " " ++ show ts
+    show (App _ l ts)     = "App " ++ show l ++ " " ++ show ts
     show (Eq  _ t t')     = "Eq  " ++ show t ++ " " ++ show t'
     show (Ne  _ t t')     = "Ne  " ++ show t ++ " " ++ show t'
     show (Gt  _ t t')     = "Gt  " ++ show t ++ " " ++ show t'
@@ -164,7 +164,7 @@ term''' = space *> ( brace
         return $ Let p defs t
 
     app :: TmplaParser Term
-    app = try $ App <$> getPosition <*> lowerWord <*> (some term <* space)
+    app = try $ App <$> getPosition <*> label <*> (some term <* space)
 
     lambda :: TmplaParser Term
     lambda = do

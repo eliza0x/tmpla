@@ -42,7 +42,7 @@ data Term = Add    P.SourcePos Term Term
           | Label  P.SourcePos String     
           | Let    P.SourcePos [Expr] Term  
           | Lambda P.SourcePos String Type Term    
-          | App    P.SourcePos String [Term]    
+          | App    P.SourcePos Term Term    
           deriving Eq
 
 instance Show Expr where
@@ -53,7 +53,7 @@ instance Show Term where
     show (Sub _ t t')     = "Sub " ++ show t ++ " " ++ show t'
     show (Mul _ t t')     = "Mul " ++ show t ++ " " ++ show t'
     show (Div _ t t')     = "Div " ++ show t ++ " " ++ show t'
-    show (App _ l ts)     = "App " ++ l ++ " " ++ show ts
+    show (App _ t t')     = "App " ++ show t ++ " " ++ show t'
     show (Eq  _ t t')     = "Eq  " ++ show t ++ " " ++ show t'
     show (Ne  _ t t')     = "Ne  " ++ show t ++ " " ++ show t'
     show (Gt  _ t t')     = "Gt  " ++ show t ++ " " ++ show t'
@@ -107,5 +107,5 @@ preNormTerm term = case term of
     P.Label  p l      -> Label  p l       
     P.Let    p es t   -> Let    p (pnormalize es) (preNormTerm t)
     P.Lambda p l t    -> Lambda p l "Unknown" (preNormTerm t)
-    P.App    p l ts   -> App    p l (map preNormTerm ts)   
+    P.App    p t ts   -> foldl (App p) (preNormTerm t) (map preNormTerm ts)   
 
