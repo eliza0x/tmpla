@@ -18,7 +18,7 @@ module Type (
     , Env
     ) where
  
-import qualified Parser as P
+-- import qualified Parser as P
 import qualified PNormal as N
 -- import qualified Util as U
 

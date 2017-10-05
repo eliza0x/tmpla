@@ -6,12 +6,12 @@ import Parser
 import PNormal
 import Type
 import Alpha
--- import KNormal
+import KNormal
 -- import Emitter
 
 import System.Environment (getArgs)
 import Data.Either (isRight)
--- import Control.Monad (when)
+import Control.Monad (when)
 import qualified Control.Eff as E
 import qualified Control.Eff.Exception as EE
 import Control.Eff ((:>))
@@ -35,14 +35,13 @@ main = do
     putStrLn "Alpha"
     let al = alpha pnorm
     print al
-  
     putStrLn "---------------"
     putStrLn "Type Check"
     let typed = E.run . EE.runExc $ (typeCheck al :: E.Eff (EE.Exc TypeCheckError :> Void) Env)
     print typed
-    -- when typed $ do
-    --     putStrLn "---------------"
-    --     putStrLn "KNormal\n"
-    --     knorms <- knormalize exprs
-    --     putStrLn . unlines . map show $ knorms
+    when (isRight typed) $ do
+        putStrLn "---------------"
+        putStrLn "KNormal\n"
+        knorms <- knormalize al
+        putStrLn . unlines . map show $ knorms
 
