@@ -28,12 +28,12 @@ import qualified Control.Eff.Lift as EL
 import Control.Eff ((:>))
 import Data.Void (Void)
 
-newtype Var = Var String
+newtype Var = Var { unvar ::  String }
     deriving Eq
 
 data KBlock = KBlock 
     { pos  :: S.SourcePos
-    , name :: String
+    , name :: Var
     , body :: [KNormal]
     } deriving Eq
 
@@ -49,7 +49,7 @@ data KNormal =
     | Ne     S.SourcePos Var Var Var
     | Gt     S.SourcePos Var Var Var
     | Lt     S.SourcePos Var Var Var
-    | Call   S.SourcePos Var Var [Var]
+    | Call   S.SourcePos Var [Var]
     | True   S.SourcePos Var
     | False  S.SourcePos Var
     | Num    S.SourcePos Var Int
@@ -60,7 +60,7 @@ instance Show Var where
     show (Var l) = l
 
 instance Show KBlock where
-    show (KBlock _ n b) = n ++ " {\n" ++ unlines (map (\x->tab++show x) b) ++ "}\n"
+    show (KBlock _ n b) = show n ++ " {\n" ++ addIndents b ++ "}\n"
 
 instance Show KNormal where
     show (Add    _ result var var') = concat [cut $ show result, " := ", cut $ show var, " + ",  cut $ show var', ";"]
@@ -71,27 +71,42 @@ instance Show KNormal where
     show (Ne     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " /= ", cut $ show var', ";"]
     show (Gt     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " > ",  cut $ show var', ";"]
     show (Lt     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " < ",  cut $ show var', ";"]
-    show (Call   _ result label args) = show result ++ " := call " ++ show label ++ unwords (map show args)
-    show (KNormal.True  _ result)   = cut (show result) ++ " := true;"
-    show (KNormal.False _ result)   = cut (show result) ++ " := false;"
-    show (Num    _ result n)        = cut (show result) ++ " := " ++ show n ++ ";"
-    show (Lambda _ result t)        = "\\" ++ show result ++ "->\n" ++ unlines (map (\x->tab++tab++show x) t)
-    show (Label  _ result label)    = cut (show result) ++ " := " ++ cut (show label) ++ ";"
-    show (If     _ result boolNorm norm norm') = cut (show result) ++ " := "
-        ++ "if ("++show boolNorm++") {\n" ++ unlines (map (\x->tab++show x) norm) 
-        ++ "} else {\n" ++ unlines (map (\x->tab++show x) norm') 
+    show (Call   _ label args)      = "_return := " ++ cut (show label) ++ " (" ++ unwords (map (cut . show) args) ++ ");"
+    show (KNormal.True  _ result)   = show result ++ " := true;"
+    show (KNormal.False _ result)   = show result ++ " := false;"
+    show (Num    _ result n)        = show result ++ " := " ++ show n ++ ";"
+    show (Label  _ result label)    = show result ++ " := " ++ show label ++ ";"
+    show (Lambda _ result t)        = 
+        "(\\" ++ show result ++ "->\n"
+        ++ addIndents t
+        ++ "\n)"
+    show (If     _ result boolNorm norm norm') = 
+        show result ++ " := "
+        ++ "if (\n"
+        ++ addIndents boolNorm
+        ++") {\n" 
+        ++ addIndents norm
+        ++ "} else {\n" 
+        ++ addIndents norm'
         ++ "}"
-    show (Let    _ result defs norms) = show result ++ " := let\n"
-        ++ unlines (map (unlines . map (\x->tab++tab++x) . lines . show) defs)
-        ++ tab  ++ "in {\n" 
-        ++ concatMap (unlines . map (\x->tab++tab++x) . lines . show) norms
-        ++ tab ++ "}\n"
- 
-tab :: String
-tab = L.replicate 4 ' '
+    show (Let    _ result defs norms) = 
+        show result ++ " := let {\n"
+        ++ (concatMap addIndent . lines . init . concat $ map show defs)
+        ++ "} in {\n" 
+        ++ addIndents norms
+        ++ "}\n"
 
 cut :: String -> String
 cut = take 7
+
+addIndents :: [KNormal] -> String
+addIndents = addIndent . unlines . map show
+
+addIndent :: String -> String
+addIndent = unlines . map (\line->tab++line) . lines
+
+tab :: String
+tab = L.replicate 4 ' '
 
 data NameTag a = Tag Var a
 
@@ -99,14 +114,14 @@ returnTag :: a -> NameTag a
 returnTag = Tag (Var "_return")
 
 knormalize :: [P.Expr] -> IO [KBlock]
-knormalize = mapM (\(P.Define p n b) -> KBlock p n <$> knormalKNormal (returnTag b))
+knormalize = mapM (\(P.Define p n b) -> KBlock p (Var n) <$> knormalKNormal (returnTag b))
 
 knormalKNormal :: NameTag P.Term -> IO [KNormal]
 knormalKNormal tag = do
-    (knorms, _) <- EL.runLift
+    (knormsRev, _) <- EL.runLift
         $ EW.runMonoidWriter
           (knormalTag tag :: E.Eff (EW.Writer [KNormal] :> EL.Lift IO :> Void) ())
-    return knorms
+    return $ L.reverse knormsRev
 
 knormalTag :: ( E.Member (EW.Writer [KNormal]) r    -- 展開リスト
             , E.SetMember EL.Lift (EL.Lift IO) r) -- IO
@@ -132,10 +147,22 @@ knormalTag (Tag n term) = do
             blocks <- EL.lift $ knormalize exprs
             knorms <- EL.lift $ knormalKNormal (returnTag t)
             EW.tell [Let p n blocks knorms]
-        -- P.Lambda p l _ t    -> undefined
-        -- P.App    p t t'     -> undefined
-        -- P.If     p bt tt ft -> undefined
-            -- trueNorm <-  knormalT (Tag n tt)
-            -- falseNorm <- knormalT (Tag n ft)
-            -- EW.tell [If  p n boolNorm trueNorm falseNorm]
+        P.Lambda p l _ t    -> do
+            knorms <- EL.lift  $ knormalKNormal (Tag n t)
+            EW.tell [Lambda p (Var l) knorms]
+        P.If     p bt tt ft -> do
+            boolNorm  <- EL.lift $ knormalKNormal (returnTag bt)
+            trueNorm  <- EL.lift $ knormalKNormal (returnTag tt)
+            falseNorm <- EL.lift $ knormalKNormal (returnTag ft)
+            EW.tell [If  p n boolNorm trueNorm falseNorm]
+        P.App    p t t'     -> do
+            let l = foldApp t'
+            uuids <- EL.lift $ map Var <$> mapM (const U.genUUID) [1..length l]
+            EW.tell [Call p uuid uuids]
+            knormalTag (Tag uuid t)
+            mapM_ knormalTag (zipWith Tag uuids l)
+    where
+    foldApp :: P.Term -> [P.Term]
+    foldApp (P.App _ t t') = t : foldApp t'
+    foldApp x              = [x]
 

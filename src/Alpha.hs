@@ -37,12 +37,18 @@ alphaT prefix env term = case term of
     P.Label  p l       -> P.Label  p 
                         . fromMaybe (error "[INTERNAL ERROR] Alpha.hs alphaT") 
                         $ M.lookup l env
-    P.Lambda p l ty tr -> P.Lambda p (prefix++"#"++l) ty $ alphaT (prefix++"#"++l) (M.insert l (prefix++"#"++l) env) tr
+    P.Lambda p l ty tr -> P.Lambda p (prefix' l) ty $ alphaT (prefix' l) (M.insert l (prefix' l) env) tr
     P.App    p t t'    -> P.App p (alphaT prefix env t) (alphaT prefix env t')
     P.Let    p es t    -> let
         env' = inspectEnv prefix env es
         in P.Let p (alpha' prefix env' es) (alphaT prefix env' t)
+    where 
+    prefix' n = if null prefix then n else prefix ++ "#" ++ n
+
 
 inspectEnv :: String -> Env -> [P.Expr] -> Env
-inspectEnv prefix =  foldr (\expr env' -> M.insert (P.name expr) (prefix ++ "#" ++ P.name expr) env') 
+inspectEnv prefix =  foldr (\expr env' -> M.insert (P.name expr) (prefix' $ P.name expr) env') 
+    where 
+    prefix' n = if null prefix then n else prefix ++ "#" ++ n
+
 

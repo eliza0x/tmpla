@@ -15,5 +15,5 @@ import qualified Data.UUID as U
 import qualified Data.UUID.V4 as U
 
 genUUID :: IO String
-genUUID = ('_':) . U.toString <$> U.nextRandom
+genUUID = take 7 . ('_':) . U.toString <$> U.nextRandom
 

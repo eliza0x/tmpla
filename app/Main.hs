@@ -7,6 +7,7 @@ import PNormal
 import Type
 import Alpha
 import KNormal
+import ANormal
 -- import Emitter
 
 import System.Environment (getArgs)
@@ -44,4 +45,8 @@ main = do
         putStrLn "KNormal\n"
         knorms <- knormalize al
         putStrLn . unlines . map show $ knorms
+        putStrLn "---------------"
+        putStrLn "ANormal\n"
+        anorms <- anormalize knorms
+        putStrLn . unlines . map show $ anorms
 
