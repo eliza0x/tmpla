@@ -220,8 +220,3 @@ lambda l ty tr = do
     ES.modify (M.insert l ty) -- 引数の型を環境に追加している
     Arr ty <$> eval tr
  
-{-
-main :: IO ()
-main = print . E.run $ EX.runExc (typeCheck source :: E.Eff (EX.Exc TypeCheckError :> Void) Env)
--}
-

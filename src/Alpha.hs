@@ -1,5 +1,6 @@
 module Alpha
     ( alpha
+    , Env
     ) where
 
 import qualified PNormal as P
@@ -44,7 +45,6 @@ alphaT prefix env term = case term of
         in P.Let p (alpha' prefix env' es) (alphaT prefix env' t)
     where 
     prefix' n = if null prefix then n else prefix ++ "#" ++ n
-
 
 inspectEnv :: String -> Env -> [P.Expr] -> Env
 inspectEnv prefix =  foldr (\expr env' -> M.insert (P.name expr) (prefix' $ P.name expr) env') 

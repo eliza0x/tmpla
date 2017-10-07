@@ -8,7 +8,7 @@ import Type
 import Alpha
 import KNormal
 import ANormal
--- import Emitter
+import Asm
 
 import System.Environment (getArgs)
 import Data.Either (isRight)
@@ -38,7 +38,7 @@ main = do
     print al
     putStrLn "---------------"
     putStrLn "Type Check"
-    let typed = E.run . EE.runExc $ (typeCheck al :: E.Eff (EE.Exc TypeCheckError :> Void) Env)
+    let typed = E.run . EE.runExc $ (typeCheck al :: E.Eff (EE.Exc TypeCheckError :> Void) Type.Env)
     print typed
     when (isRight typed) $ do
         putStrLn "---------------"
@@ -49,4 +49,16 @@ main = do
         putStrLn "ANormal\n"
         anorms <- anormalize knorms
         putStrLn . unlines . map show $ anorms
+        putStrLn "---------------"
+        putStrLn "Labeled asm\n"
+        let labeledAsm = toLabeledAsm anorms
+        mapM_ print labeledAsm
+        putStrLn "---------------"
+        putStrLn "Alloc\n"
+        let alloced =  alloc labeledAsm 
+        mapM_ print alloced
+        putStrLn "---------------"
+        putStrLn "Expand\n"
+        let exed = expandInstruction alloced
+        mapM_ print exed
 

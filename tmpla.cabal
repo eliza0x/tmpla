@@ -22,6 +22,11 @@ library
                      , Alpha
                      , KNormal
                      , ANormal
+                     , Asm
+                     , Asm.Type
+                     , Asm.Label
+                     , Asm.Alloc
+                     , Asm.Expand
                      , Util
   build-depends:       base >= 4.7 && < 5
                      , megaparsec

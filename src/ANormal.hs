@@ -11,6 +11,7 @@ Stability   : experimental
 
 module ANormal 
     ( ABlock(..)
+    , CallElse(..)
     , ANormal(..)
     , anormalize
     ) where
@@ -21,6 +22,7 @@ import qualified Util as U
 
 import qualified Data.List as L
 import qualified Control.Monad.Writer as W
+import qualified Control.Monad.State.Strict as S
 import Control.Monad (forM_)
 import Data.Maybe (isJust)
 
@@ -30,20 +32,20 @@ data ABlock = ABlock
     , body :: [ANormal]} 
  
 data CroppedBlock =
-      ElseBlock
-    { pos'  :: S.SourcePos
-    , name' :: K.Var
-    , croppedVars :: [K.Var]
-    , body' :: [K.KNormal]}
-    | CBlock
-    { pos'  :: S.SourcePos
-    , name' :: K.Var
-    , body' :: [K.KNormal]
-    } deriving Eq
+      ElseBlock 
+        S.SourcePos 
+        K.Var       -- ^ else用のブロック名
+        K.Var       -- ^ continue用のブロック名
+        [K.Var]     -- ^ 内部で使用している変数名
+        [K.KNormal]
+    | CBlock S.SourcePos K.Var [K.KNormal]
+    deriving Eq
 
-data CallElse = CallElse { addrVar :: K.Var
-                         , argVars :: [K.Var]
-                         } deriving (Show, Eq)
+data CallElse = CallElse 
+                    K.Var   -- ^ Else label用変数
+                    K.Var   -- ^ Continue label変数
+                    [K.Var] -- ^ 内部で使用している変数
+    deriving (Show, Eq)
 
 data ANormal =
       Lambda S.SourcePos K.Var [ANormal]
@@ -59,6 +61,7 @@ data ANormal =
     | Call   S.SourcePos K.Var [K.Var]
     | Num    S.SourcePos K.Var Int
     | Label  S.SourcePos K.Var String
+    | Jot    S.SourcePos K.Var
     deriving Eq
 
 instance Show ABlock where
@@ -76,6 +79,7 @@ instance Show ANormal where
     show (Call   _ label args)      = "_return := " ++ cut (show label) ++ " (" ++ unwords (map (cut . show) args) ++ ");"
     show (Num    _ result n)        = show result ++ " := " ++ show n ++ ";"
     show (Label  _ result label)    = show result ++ " := " ++ show label ++ ";"
+    show (Jot    _ label)           = "jot "++show label++";"
     show (Lambda _ result t)        = 
         "(\\" ++ show result ++ "->\n"
         ++ addIndents t
@@ -117,11 +121,39 @@ anormalizeCropped cblocks = do
     where
     anormalizeC' :: CroppedBlock -> W.WriterT [CroppedBlock] IO ABlock
     anormalizeC' (CBlock p n b)         = ABlock p n . concat <$> mapM anormalNorm b
-    anormalizeC' (ElseBlock p n vars b) = let
-        lambdas = map (K.Lambda p) vars :: [[K.KNormal] -> K.KNormal]
+    anormalizeC' (ElseBlock p n c vars b) = let
+        lambdas =  map (K.Lambda p) vars :: [[K.KNormal] -> K.KNormal]
         b' = foldr (\x y-> [x y]) b lambdas
-        in ABlock p n . concat <$> mapM anormalNorm b'
+        in ABlock p n . (++[Jot p c]) . map (addPrefix "else#")  . concat <$> mapM anormalNorm b'
 
+addPrefix :: String -> ANormal -> ANormal
+addPrefix prefix knorm = S.evalState (addPrefix' prefix knorm) []
+
+addPrefix' :: String -> ANormal -> S.State [K.Var] ANormal
+addPrefix' prefix knorm = case knorm of
+    Add    p result a b    -> return $ Add  p result a b    
+    Sub    p result a b    -> return $ Sub  p result a b    
+    Mul    p result a b    -> return $ Mul  p result a b    
+    Div    p result a b    -> return $ Div  p result a b    
+    Eq     p result a b    -> return $ Eq   p result a b    
+    Ne     p result a b    -> return $ Ne   p result a b    
+    Gt     p result a b    -> return $ Gt   p result a b    
+    Lt     p result a b    -> return $ Lt   p result a b    
+    Call   p result args   -> return $ Call p result args   
+    Num    p result n      -> return $ Num  p result n      
+    Label  p result l      -> do
+        list <- S.get
+        let l' = if isJust (L.find (==K.Var l) list) then prefix++l else l
+        return $ Label  p result l'
+    Jot    p a             -> return $ Jot p a
+    Bne    p result banorms tanorms celse -> 
+        Bne p result <$> mapM (addPrefix' prefix) banorms
+                     <*> mapM (addPrefix' prefix) tanorms
+                     <*> return celse
+    Lambda p arg anorms -> do
+        S.modify (arg:)
+        Lambda p (K.Var $ prefix ++ K.fromVar arg) <$> mapM (addPrefix' prefix) anorms
+ 
 anormalNorm :: K.KNormal -> W.WriterT [CroppedBlock] IO [ANormal]
 anormalNorm knorm = case knorm of
     K.Add    p result var var'            -> return [Add  p result var var']
@@ -145,12 +177,13 @@ anormalNorm knorm = case knorm of
             K.KBlock p n b -> W.tell [CBlock p n b])
         concat <$> mapM anormalNorm norms
     K.If     p result bnorms tnorms fnorm -> do
-        uuid <- K.Var <$> W.lift U.genUUID
+        elseAddr     <- K.Var <$> W.lift U.genUUID
+        continueAddr <- K.Var <$> W.lift U.genUUID
         abnorms <- concat <$> mapM anormalNorm bnorms
         atnorms <- concat <$> mapM anormalNorm tnorms
         let usingVars = inspectUsingLabels fnorm 
-            callElse = CallElse uuid usingVars
-        W.tell [ElseBlock p uuid usingVars fnorm] -- こいつは関数になるので、必要な変数を引くようにする
+            callElse = CallElse elseAddr continueAddr usingVars
+        W.tell [ElseBlock p elseAddr continueAddr usingVars fnorm] -- こいつは関数になるので、必要な変数を引くようにする
         return [Bne p result abnorms atnorms callElse]
 
 inspectUsingLabels :: [K.KNormal] -> [K.Var]

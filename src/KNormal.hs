@@ -28,8 +28,8 @@ import qualified Control.Eff.Lift as EL
 import Control.Eff ((:>))
 import Data.Void (Void)
 
-newtype Var = Var { unvar ::  String }
-    deriving Eq
+newtype Var = Var { fromVar ::  String }
+    deriving (Eq, Ord)
 
 data KBlock = KBlock 
     { pos  :: S.SourcePos
