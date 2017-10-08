@@ -2,7 +2,6 @@ module Asm.Expand where
 
 import qualified Parser as S
 import qualified Asm.Type as AT
-import qualified Asm.Alloc as AL
 import Type (Var(..))
 
 import qualified Data.Map.Strict as M
@@ -54,19 +53,19 @@ toBin n = N.showIntAtBase 2 C.intToDigit n ""
 alignment :: Int -> String -> String
 alignment n str = replicate (n - length str) '0' ++  str
 
-expandInstruction :: [AT.Tag (AT.Asm AL.Reg)] -> [BinAsm]
+expandInstruction :: [AT.Tag (AT.Asm AT.Reg)] -> [BinAsm]
 expandInstruction tags = toBinAsm $ concatMap (\tag -> case tag of
     AT.Tag a  -> [AT.Tag a]
     AT.Data b -> map  AT.Data $ expandInstruction' b) tags
 
-expandInstruction' :: AT.Asm AL.Reg -> [AT.Asm AL.Reg]
+expandInstruction' :: AT.Asm AT.Reg -> [AT.Asm AT.Reg]
 expandInstruction' asm = case asm of
-    AT.Push  pos a     -> [AT.Subi pos (AL.Reg 30) (AL.Reg 30) 1, AT.Sw pos a (AL.Reg 30) 0]
-    AT.Pop   pos a     -> [AT.Lw pos a (AL.Reg 30) 0, AT.Addi pos (AL.Reg 30) (AL.Reg 30) 0]
+    AT.Push  pos a     -> [AT.Subi pos (AT.Reg 30) (AT.Reg 30) 1, AT.Sw pos a (AT.Reg 30) 0]
+    AT.Pop   pos a     -> [AT.Lw pos a (AT.Reg 30) 0, AT.Addi pos (AT.Reg 30) (AT.Reg 30) 0]
     AT.Num   pos a n   -> [AT.Bind pos a n]
     x                  -> [x]
 
-toBinAsm :: [AT.Tag (AT.Asm AL.Reg)] -> [BinAsm]
+toBinAsm :: [AT.Tag (AT.Asm AT.Reg)] -> [BinAsm]
 toBinAsm exprs = let
     labelAddrDict = inspectLabelAddr exprs :: M.Map Var Int
     exprs'    = concatMap (\tag -> case tag of
@@ -74,32 +73,32 @@ toBinAsm exprs = let
         AT.Data a -> [a]) exprs
     in map (conv labelAddrDict) exprs'
 
-conv :: M.Map Var Int -> AT.Asm AL.Reg -> BinAsm
+conv :: M.Map Var Int -> AT.Asm AT.Reg -> BinAsm
 conv dict asm = case asm of
-    AT.Add   pos a b c -> Add pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Sub   pos a b c -> Sub pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Mul   pos a b c -> Mul pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Div   pos a b c -> Div pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Gt    pos a b c -> Gt  pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Lt    pos a b c -> Lt  pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Eq    pos a b c -> Eq  pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Ne    pos a b c -> Ne  pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
-    AT.Bof   pos a b   -> Bof pos (AL.fromReg a) (AL.fromReg b)
-    AT.Jot   pos a     -> Jot pos (AL.fromReg a)
-    AT.Bind  pos a n   -> Bind pos (AL.fromReg a) n
-    AT.Label pos a l   -> Bind pos (AL.fromReg a) (dict ! Var l)
-    AT.Sw    pos a b n -> Sw pos (AL.fromReg a) (AL.fromReg b) n
-    AT.Lw    pos a b n -> Lw pos (AL.fromReg a) (AL.fromReg b) n
-    AT.Addi  pos a b n -> Addi pos (AL.fromReg a) (AL.fromReg b) n
-    AT.Subi  pos a b n -> Subi pos (AL.fromReg a) (AL.fromReg b) n
+    AT.Add   pos a b c -> Add pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Sub   pos a b c -> Sub pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Mul   pos a b c -> Mul pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Div   pos a b c -> Div pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Gt    pos a b c -> Gt  pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Lt    pos a b c -> Lt  pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Eq    pos a b c -> Eq  pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Ne    pos a b c -> Ne  pos (AT.fromReg a) (AT.fromReg b) (AT.fromReg  c)
+    AT.Bof   pos a b   -> Bof pos (AT.fromReg a) (AT.fromReg b)
+    AT.Jot   pos a     -> Jot pos (AT.fromReg a)
+    AT.Bind  pos a n   -> Bind pos (AT.fromReg a) n
+    AT.Label pos a l   -> Bind pos (AT.fromReg a) (dict ! Var l)
+    AT.Sw    pos a b n -> Sw pos (AT.fromReg a) (AT.fromReg b) n
+    AT.Lw    pos a b n -> Lw pos (AT.fromReg a) (AT.fromReg b) n
+    AT.Addi  pos a b n -> Addi pos (AT.fromReg a) (AT.fromReg b) n
+    AT.Subi  pos a b n -> Subi pos (AT.fromReg a) (AT.fromReg b) n
     AT.Num{}           -> undefined
     AT.Push{}          -> undefined
     AT.Pop{}           -> undefined
 
-inspectLabelAddr :: [AT.Tag(AT.Asm AL.Reg)] -> M.Map Var Int
+inspectLabelAddr :: [AT.Tag(AT.Asm AT.Reg)] -> M.Map Var Int
 inspectLabelAddr tags = inspectLabelAddr' 0 tags M.empty
 
-inspectLabelAddr' :: Int -> [AT.Tag (AT.Asm AL.Reg)] -> M.Map Var Int -> M.Map Var Int
+inspectLabelAddr' :: Int -> [AT.Tag (AT.Asm AT.Reg)] -> M.Map Var Int -> M.Map Var Int
 inspectLabelAddr' pc (x:xs) dict = inspectLabelAddr' (pc+1) xs $ (case x of
     AT.Tag l -> M.insert l pc
     AT.Data _ -> id) dict

@@ -8,8 +8,6 @@ import Type (Var(..))
 
 import Asm.Type
 
-type LabeledAsm = Asm Var
-
 toLabeledAsm :: [A.ABlock] -> [Tag LabeledAsm]
 toLabeledAsm = concatMap
     (\(A.ABlock _ n b) -> let

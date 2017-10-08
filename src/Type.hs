@@ -11,6 +11,7 @@ Stability   : experimental
 
 module Type (
       Var(..)
+    , IntermediateForm(..)
     ) where
 
 newtype Var = Var { fromVar ::  String }
@@ -19,4 +20,7 @@ newtype Var = Var { fromVar ::  String }
 instance Show Var where
     show (Var l) = l
 
+class IntermediateForm a where
+    lvar :: a -> Var
+    isContain :: Var -> a -> Bool
 
