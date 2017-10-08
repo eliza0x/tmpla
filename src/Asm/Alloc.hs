@@ -100,7 +100,7 @@ alloc' (x:xs) lifetimes = do
     -- 以降の同名の変数は検査済みとする
     let xs' = alreadyExsists (AT.lVar $ body x) xs :: [AfterSecond AL.LabeledAsm]
     let reg = Reg $ openReg lifetimes
-    trace ("[DEBUG] " ++ show x) $ W.tell [(lvar, reg)]
+    W.tell [(lvar, reg)]
     let lifetimes' = map (Arr.second predLife)
             $ occupetionReg (fromReg reg) distance lifetimes
     alloc' xs' lifetimes'
