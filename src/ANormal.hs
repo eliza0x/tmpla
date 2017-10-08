@@ -19,6 +19,7 @@ module ANormal
 import qualified Parser as S
 import qualified KNormal as K
 import qualified Util as U
+import Type (Var(..))
 
 import qualified Data.List as L
 import qualified Control.Monad.Writer as W
@@ -28,40 +29,40 @@ import Data.Maybe (isJust)
 
 data ABlock = ABlock 
     { pos  :: S.SourcePos
-    , name :: K.Var
+    , name :: Var
     , body :: [ANormal]} 
  
 data CroppedBlock =
       ElseBlock 
         S.SourcePos 
-        K.Var       -- ^ else用のブロック名
-        K.Var       -- ^ continue用のブロック名
-        [K.Var]     -- ^ 内部で使用している変数名
+        Var       -- ^ else用のブロック名
+        Var       -- ^ continue用のブロック名
+        [Var]     -- ^ 内部で使用している変数名
         [K.KNormal]
-    | CBlock S.SourcePos K.Var [K.KNormal]
+    | CBlock S.SourcePos Var [K.KNormal]
     deriving Eq
 
 data CallElse = CallElse 
-                    K.Var   -- ^ Else label用変数
-                    K.Var   -- ^ Continue label変数
-                    [K.Var] -- ^ 内部で使用している変数
+                    Var   -- ^ Else label用変数
+                    Var   -- ^ Continue label変数
+                    [Var] -- ^ 内部で使用している変数
     deriving (Show, Eq)
 
 data ANormal =
-      Lambda S.SourcePos K.Var [ANormal]
-    | Bne    S.SourcePos K.Var [ANormal] [ANormal] CallElse
-    | Add    S.SourcePos K.Var K.Var K.Var
-    | Sub    S.SourcePos K.Var K.Var K.Var 
-    | Mul    S.SourcePos K.Var K.Var K.Var
-    | Div    S.SourcePos K.Var K.Var K.Var
-    | Eq     S.SourcePos K.Var K.Var K.Var
-    | Ne     S.SourcePos K.Var K.Var K.Var
-    | Gt     S.SourcePos K.Var K.Var K.Var
-    | Lt     S.SourcePos K.Var K.Var K.Var
-    | Call   S.SourcePos K.Var [K.Var]
-    | Num    S.SourcePos K.Var Int
-    | Label  S.SourcePos K.Var String
-    | Jot    S.SourcePos K.Var
+      Lambda S.SourcePos Var [ANormal]
+    | Bne    S.SourcePos Var [ANormal] [ANormal] CallElse
+    | Add    S.SourcePos Var Var Var
+    | Sub    S.SourcePos Var Var Var 
+    | Mul    S.SourcePos Var Var Var
+    | Div    S.SourcePos Var Var Var
+    | Eq     S.SourcePos Var Var Var
+    | Ne     S.SourcePos Var Var Var
+    | Gt     S.SourcePos Var Var Var
+    | Lt     S.SourcePos Var Var Var
+    | Call   S.SourcePos Var [Var]
+    | Num    S.SourcePos Var Int
+    | Label  S.SourcePos Var String
+    | Jot    S.SourcePos Var
     deriving Eq
 
 instance Show ABlock where
@@ -129,7 +130,7 @@ anormalizeCropped cblocks = do
 addPrefix :: String -> ANormal -> ANormal
 addPrefix prefix knorm = S.evalState (addPrefix' prefix knorm) []
 
-addPrefix' :: String -> ANormal -> S.State [K.Var] ANormal
+addPrefix' :: String -> ANormal -> S.State [Var] ANormal
 addPrefix' prefix knorm = case knorm of
     Add    p result a b    -> return $ Add  p result a b    
     Sub    p result a b    -> return $ Sub  p result a b    
@@ -143,7 +144,7 @@ addPrefix' prefix knorm = case knorm of
     Num    p result n      -> return $ Num  p result n      
     Label  p result l      -> do
         list <- S.get
-        let l' = if isJust (L.find (==K.Var l) list) then prefix++l else l
+        let l' = if isJust (L.find (==Var l) list) then prefix++l else l
         return $ Label  p result l'
     Jot    p a             -> return $ Jot p a
     Bne    p result banorms tanorms celse -> 
@@ -152,7 +153,7 @@ addPrefix' prefix knorm = case knorm of
                      <*> return celse
     Lambda p arg anorms -> do
         S.modify (arg:)
-        Lambda p (K.Var $ prefix ++ K.fromVar arg) <$> mapM (addPrefix' prefix) anorms
+        Lambda p (Var $ prefix ++ fromVar arg) <$> mapM (addPrefix' prefix) anorms
  
 anormalNorm :: K.KNormal -> W.WriterT [CroppedBlock] IO [ANormal]
 anormalNorm knorm = case knorm of
@@ -177,8 +178,8 @@ anormalNorm knorm = case knorm of
             K.KBlock p n b -> W.tell [CBlock p n b])
         concat <$> mapM anormalNorm norms
     K.If     p result bnorms tnorms fnorm -> do
-        elseAddr     <- K.Var <$> W.lift U.genUUID
-        continueAddr <- K.Var <$> W.lift U.genUUID
+        elseAddr     <- Var <$> W.lift U.genUUID
+        continueAddr <- Var <$> W.lift U.genUUID
         abnorms <- concat <$> mapM anormalNorm bnorms
         atnorms <- concat <$> mapM anormalNorm tnorms
         let usingVars = inspectUsingLabels fnorm 
@@ -186,14 +187,14 @@ anormalNorm knorm = case knorm of
         W.tell [ElseBlock p elseAddr continueAddr usingVars fnorm] -- こいつは関数になるので、必要な変数を引くようにする
         return [Bne p result abnorms atnorms callElse]
 
-inspectUsingLabels :: [K.KNormal] -> [K.Var]
+inspectUsingLabels :: [K.KNormal] -> [Var]
 inspectUsingLabels knorms = filter isGlobalVar
                           $ L.nub
                           $ W.execWriter (mapM inspectUsingLabels' knorms)
     where
-    isGlobalVar :: K.Var -> Bool
-    isGlobalVar (K.Var n) = isJust $ L.find (== '#') n
-    inspectUsingLabels' :: K.KNormal -> W.Writer [K.Var] ()
+    isGlobalVar :: Var -> Bool
+    isGlobalVar (Var n) = isJust $ L.find (== '#') n
+    inspectUsingLabels' :: K.KNormal -> W.Writer [Var] ()
     inspectUsingLabels' x = case x of
         K.Add{}   -> return ()
         K.Sub{}   -> return ()
@@ -207,7 +208,7 @@ inspectUsingLabels knorms = filter isGlobalVar
         K.False{} -> return ()
         K.Num{}   -> return ()
         K.Call{}  -> return ()
-        K.Label  _ _ l           -> if head l == '_' then return () else W.tell [K.Var l]
+        K.Label  _ _ l           -> if head l == '_' then return () else W.tell [Var l]
         K.Lambda _ _ norms       -> mapM_ inspectUsingLabels' norms
         K.If     _ _ bns tns fns -> mapM_ inspectUsingLabels' bns 
                                  >> mapM_ inspectUsingLabels' tns

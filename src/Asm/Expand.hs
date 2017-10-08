@@ -1,9 +1,9 @@
 module Asm.Expand where
 
 import qualified Parser as S
-import qualified KNormal as K
 import qualified Asm.Type as AT
 import qualified Asm.Alloc as AL
+import Type (Var(..))
 
 import qualified Data.Map.Strict as M
 import Data.Map.Strict ((!))
@@ -32,12 +32,12 @@ instance Show BinAsm where
     show (Add _ a b c)  = "000000" ++ concatMap to6digitBin [a, b, c]
     show (Sub _ a b c)  = "000001" ++ concatMap to6digitBin [a, b, c]
     show (Mul _ a b c)  = "000010" ++ concatMap to6digitBin [a, b, c]
-    show (Div _ a b c)  = replicate 24 '0'
+    show Div{}          = replicate 24 '0'
     show (Gt  _ a b c)  = "000100" ++ concatMap to6digitBin [a, b, c]
     show (Lt  _ a b c)  = "000100" ++ concatMap to6digitBin [a, c, b]
     show (Eq  _ a b c)  = "000111" ++ concatMap to6digitBin [a, b, c]
     show (Ne  _ a b c)  = "001000" ++ concatMap to6digitBin [a, b, c]
-    show (Bof _ a b)    = undefined -- "001101" ++ concatMap to6digitBin [a, b]
+    show Bof{}          = undefined -- TODO: CPUにBofを定義する
     show (Sw  _ a b n)  = "011100" ++ concatMap to6digitBin [a, b, n]
     show (Lw  _ a b n)  = "011101" ++ concatMap to6digitBin [a, b, n]
     show (Addi _ a b n) = "010000" ++ concatMap to6digitBin [a, b, n]
@@ -68,13 +68,13 @@ expandInstruction' asm = case asm of
 
 toBinAsm :: [AT.Tag (AT.Asm AL.Reg)] -> [BinAsm]
 toBinAsm exprs = let
-    labelAddrDict = inspectLabelAddr exprs :: M.Map K.Var Int
+    labelAddrDict = inspectLabelAddr exprs :: M.Map Var Int
     exprs'    = concatMap (\tag -> case tag of
         AT.Tag _ -> []
         AT.Data a -> [a]) exprs
     in map (conv labelAddrDict) exprs'
 
-conv :: M.Map K.Var Int -> AT.Asm AL.Reg -> BinAsm
+conv :: M.Map Var Int -> AT.Asm AL.Reg -> BinAsm
 conv dict asm = case asm of
     AT.Add   pos a b c -> Add pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
     AT.Sub   pos a b c -> Sub pos (AL.fromReg a) (AL.fromReg b) (AL.fromReg  c)
@@ -87,7 +87,7 @@ conv dict asm = case asm of
     AT.Bof   pos a b   -> Bof pos (AL.fromReg a) (AL.fromReg b)
     AT.Jot   pos a     -> Jot pos (AL.fromReg a)
     AT.Bind  pos a n   -> Bind pos (AL.fromReg a) n
-    AT.Label pos a l   -> Bind pos (AL.fromReg a) (dict ! K.Var l)
+    AT.Label pos a l   -> Bind pos (AL.fromReg a) (dict ! Var l)
     AT.Sw    pos a b n -> Sw pos (AL.fromReg a) (AL.fromReg b) n
     AT.Lw    pos a b n -> Lw pos (AL.fromReg a) (AL.fromReg b) n
     AT.Addi  pos a b n -> Addi pos (AL.fromReg a) (AL.fromReg b) n
@@ -96,10 +96,10 @@ conv dict asm = case asm of
     AT.Push{}          -> undefined
     AT.Pop{}           -> undefined
 
-inspectLabelAddr :: [AT.Tag(AT.Asm AL.Reg)] -> M.Map K.Var Int
+inspectLabelAddr :: [AT.Tag(AT.Asm AL.Reg)] -> M.Map Var Int
 inspectLabelAddr tags = inspectLabelAddr' 0 tags M.empty
 
-inspectLabelAddr' :: Int -> [AT.Tag (AT.Asm AL.Reg)] -> M.Map K.Var Int -> M.Map K.Var Int
+inspectLabelAddr' :: Int -> [AT.Tag (AT.Asm AL.Reg)] -> M.Map Var Int -> M.Map Var Int
 inspectLabelAddr' pc (x:xs) dict = inspectLabelAddr' (pc+1) xs $ (case x of
     AT.Tag l -> M.insert l pc
     AT.Data _ -> id) dict

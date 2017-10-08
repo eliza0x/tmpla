@@ -5,7 +5,7 @@ module Asm.Type
     ) where
 
 import qualified Parser as S
-import qualified KNormal as K
+import Type (Var(..))
 
 data Asm a =
       Add   S.SourcePos a a a
@@ -71,7 +71,7 @@ instance (Show a) => Show (Asm a) where
     show (Addi  _ a b n) = show a ++ " := " ++ show b ++ " + " ++ show n ++ ";"
     show (Subi  _ a b n) = show a ++ " := " ++ show b ++ " - " ++ show n ++ ";"
  
-data Tag a = Tag K.Var
+data Tag a = Tag Var
            | Data a
     deriving Eq
 

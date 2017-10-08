@@ -21,15 +21,13 @@ import qualified Data.List as L
 import qualified Parser as S
 import qualified PNormal as P
 import qualified Util as U
+import Type(Var(..))
 
 import qualified Control.Eff as E
 import qualified Control.Eff.Writer.Strict as EW
 import qualified Control.Eff.Lift as EL
 import Control.Eff ((:>))
 import Data.Void (Void)
-
-newtype Var = Var { fromVar ::  String }
-    deriving (Eq, Ord)
 
 data KBlock = KBlock 
     { pos  :: S.SourcePos
@@ -55,9 +53,6 @@ data KNormal =
     | Num    S.SourcePos Var Int
     | Label  S.SourcePos Var String
     deriving Eq
-
-instance Show Var where
-    show (Var l) = l
 
 instance Show KBlock where
     show (KBlock _ n b) = show n ++ " {\n" ++ addIndents b ++ "}\n"

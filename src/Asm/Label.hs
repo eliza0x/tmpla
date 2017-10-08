@@ -3,12 +3,12 @@ module Asm.Label
     , LabeledAsm
     )where
 
-import qualified KNormal as K
 import qualified ANormal as A
+import Type (Var(..))
 
 import Asm.Type
 
-type LabeledAsm = Asm K.Var
+type LabeledAsm = Asm Var
 
 toLabeledAsm :: [A.ABlock] -> [Tag LabeledAsm]
 toLabeledAsm = concatMap
@@ -36,4 +36,4 @@ labeledAsm (Data body) = case body of
         basm = concatMap (labeledAsm . Data) bnorms 
         tasm = concatMap (labeledAsm . Data) tnorms 
         continueTag = Tag continueAddr
-        in basm ++ [Data $ Bof p (K.Var "_return") elseAddr] ++ tasm ++ [continueTag]
+        in basm ++ [Data $ Bof p (Var "_return") elseAddr] ++ tasm ++ [continueTag]

@@ -4,7 +4,7 @@ module Main where
 
 import Parser
 import PNormal
-import Type
+import Typeing
 import Alpha
 import KNormal
 import ANormal
@@ -38,7 +38,7 @@ main = do
     print al
     putStrLn "---------------"
     putStrLn "Type Check"
-    let typed = E.run . EE.runExc $ (typeCheck al :: E.Eff (EE.Exc TypeCheckError :> Void) Type.Env)
+    let typed = E.run . EE.runExc $ (typeCheck al :: E.Eff (EE.Exc TypeCheckError :> Void) Typeing.Env)
     print typed
     when (isRight typed) $ do
         putStrLn "---------------"

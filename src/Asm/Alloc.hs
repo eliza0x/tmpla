@@ -2,7 +2,7 @@ module Asm.Alloc where
 
 import qualified Asm.Type as AT
 import qualified Asm.Label as AL
-import qualified KNormal as K
+import Type (Var(..))
 
 import qualified Data.List as L
 import qualified Control.Monad.Writer.Strict as W
@@ -11,8 +11,6 @@ import qualified Data.Map.Strict as M
 import qualified Control.Arrow as Arr
 import Control.Applicative ((<|>))
 import Data.Maybe
-
-import Debug.Trace
 
 newtype Reg = Reg { fromReg :: Int }
     deriving (Show, Eq)
@@ -59,12 +57,12 @@ alloc lasms = let
     regs = map (\n -> (n, Dead)) [0..28]
     in conv lasms (M.fromList $ W.execWriter $ alloc' lasms' regs)
 
-conv :: [AT.Tag AL.LabeledAsm] -> M.Map K.Var Reg -> [AT.Tag (AT.Asm Reg)]
+conv :: [AT.Tag AL.LabeledAsm] -> M.Map Var Reg -> [AT.Tag (AT.Asm Reg)]
 conv lasms dict = map (\lasm -> case lasm of 
     AT.Tag a  -> AT.Tag a
     AT.Data b -> AT.Data $ conv' dict b) lasms 
 
-conv' :: M.Map K.Var Reg -> AL.LabeledAsm -> AT.Asm Reg
+conv' :: M.Map Var Reg -> AL.LabeledAsm -> AT.Asm Reg
 conv' dict lasm = case lasm of
     AT.Addi  pos a b n -> AT.Addi  pos (access a dict) (access b dict) n 
     AT.Subi  pos a b n -> AT.Subi  pos (access a dict) (access b dict) n 
@@ -86,10 +84,10 @@ conv' dict lasm = case lasm of
     AT.Label pos a l   -> AT.Label pos (access a dict) l
     AT.Num   pos a n   -> AT.Num   pos (access a dict) n
     where
-    access :: K.Var -> M.Map K.Var Reg -> Reg
+    access :: Var -> M.Map Var Reg -> Reg
     access key dict' = M.fromMaybe (error "[INTERNAL ERROR]") $ M.lookup key dict'
 
-alloc' :: [AfterSecond AL.LabeledAsm] -> [(Int, Life)] -> W.Writer [(K.Var, Reg)] ()
+alloc' :: [AfterSecond AL.LabeledAsm] -> [(Int, Life)] -> W.Writer [(Var, Reg)] ()
 alloc' [] _ = return ()
 alloc' (AfterSecond _:xs) lifetimes = alloc' xs (map (Arr.second predLife ) lifetimes)
 alloc' (x:xs) lifetimes = do
@@ -105,19 +103,19 @@ alloc' (x:xs) lifetimes = do
             $ occupetionReg (fromReg reg) distance lifetimes
     alloc' xs' lifetimes'
 
-lastAppear :: Int -> K.Var ->  [AfterSecond AL.LabeledAsm] -> Maybe Int
+lastAppear :: Int -> Var ->  [AfterSecond AL.LabeledAsm] -> Maybe Int
 lastAppear _ _ [] = Nothing
 lastAppear distance var (a:lasms) = if isContain var (body a)
     then lastAppear (distance+1) var lasms <|> Just distance
     else lastAppear (distance+1) var lasms
 
-alreadyExsists :: K.Var -> [AfterSecond AL.LabeledAsm] -> [AfterSecond AL.LabeledAsm] 
+alreadyExsists :: Var -> [AfterSecond AL.LabeledAsm] -> [AfterSecond AL.LabeledAsm] 
 alreadyExsists _ [] = []
 alreadyExsists var (AfterSecond b:xs) = AfterSecond b : alreadyExsists var xs
 alreadyExsists var (FirstTime b:xs) = (if var == AT.lVar b 
     then AfterSecond b   else FirstTime b) : alreadyExsists var xs
 
-isContain :: K.Var -> AL.LabeledAsm -> Bool
+isContain :: Var -> AL.LabeledAsm -> Bool
 isContain v (AT.Addi  _ _ a _) = v == a
 isContain v (AT.Subi  _ _ a _) = v == a
 isContain v (AT.Sw    _ _ a _) = v == a

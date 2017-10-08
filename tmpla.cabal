@@ -18,6 +18,7 @@ library
   exposed-modules:     Emitter
                      , Parser
                      , Type
+                     , Typeing
                      , PNormal
                      , Alpha
                      , KNormal
