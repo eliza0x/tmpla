@@ -12,7 +12,11 @@ Stability   : experimental
 木構造の式を展開する、第一段階の中間表現
 -}
 
-module KNormal where
+module KNormal 
+    ( KNormal(..)
+    , KBlock(..)
+    , knormalize
+    )where
 
 -- import qualified Data.Map.Strict as M
 -- import Data.Maybe
