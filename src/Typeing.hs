@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
 
 {- |
 Module      : Typeing
@@ -86,26 +88,26 @@ evalExprs exprs iterNum env = do
 eval :: (E.Member (ES.State Env) r, E.Member (EX.Exc TypeCheckError) r)
      => N.Term 
      -> E.Eff r Type
-eval term = case term of
-    N.Add _ t t'        -> arith t t'
-    N.Sub _ t t'        -> arith t t'
-    N.Mul _ t t'        -> arith t t'
-    N.Div _ t t'        -> arith t t'
-    N.Eq  _ t t'        -> eqType t t'
-    N.Ne  _ t t'        -> eqType t t'
-    N.Gt  _ t t'        -> eqType t t'
-    N.Lt  _ t t'        -> eqType t t'
-    N.True  _           -> return TBool
-    N.False _           -> return TBool
-    N.Num _ _           -> return TInt
-    N.Label _ l         -> label l
-    N.App   _ t t'      -> app t t'
-    N.If _ b t t'       -> evalIf b t t'
-    N.Lambda _ n ty tr  -> lambda n (fromString ty) tr
-    N.Let _ exprs tr    -> do
+eval = \case
+    N.Add {..}  -> arith  term1 term2
+    N.Sub {..}  -> arith  term1 term2
+    N.Mul {..}  -> arith  term1 term2
+    N.Div {..}  -> arith  term1 term2
+    N.Eq  {..}  -> eqType term1 term2
+    N.Ne  {..}  -> eqType term1 term2
+    N.Gt  {..}  -> eqType term1 term2
+    N.Lt  {..}  -> eqType term1 term2
+    N.True  {}  -> return TBool
+    N.False {}  -> return TBool
+    N.Num   {}  -> return TInt
+    N.Label {..} -> fromLabel label
+    N.App   {..} -> app term1 term2
+    N.If    {..} -> evalIf cond term1 term2
+    N.Lambda{..} -> lambda label (fromString arg) term
+    N.Let   {..} -> do
         env' <- evalExprs exprs 50 . inspectExprs exprs =<< ES.get
         ES.put env'
-        eval tr
+        eval term
     
 fromString :: String -> Type
 fromString str = case str of
@@ -163,10 +165,10 @@ eqType t t' = do
     labelFromType _         = Nothing
 
 -- | Labelを処理する
-label :: (E.Member (ES.State Env) r)
+fromLabel :: (E.Member (ES.State Env) r)
       => String
       -> E.Eff r Type
-label l = fromMaybe (TUnkL l) -- 環境に存在しない変数の場合ラベル付き未確定型を返す
+fromLabel l = fromMaybe (TUnkL l) -- 環境に存在しない変数の場合ラベル付き未確定型を返す
         . M.lookup l <$> ES.get
 
 -- | 適用を処理する

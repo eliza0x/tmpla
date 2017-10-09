@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 {- |
 Module      : ANormal
 Description : 木構造の式を展開する
@@ -157,35 +159,35 @@ addPrefix' prefix knorm = case knorm of
  
 anormalNorm :: K.KNormal -> W.WriterT [CroppedBlock] IO [ANormal]
 anormalNorm knorm = case knorm of
-    K.Add    p result var var'            -> return [Add  p result var var']
-    K.Sub    p result var var'            -> return [Sub  p result var var']
-    K.Mul    p result var var'            -> return [Mul  p result var var']
-    K.Div    p result var var'            -> return [Div  p result var var']
-    K.Eq     p result var var'            -> return [Eq   p result var var']
-    K.Ne     p result var var'            -> return [Ne   p result var var']
-    K.Gt     p result var var'            -> return [Gt   p result var var']
-    K.Lt     p result var var'            -> return [Lt   p result var var']
-    K.Call   p result vars                -> return [Call p result vars]
-    K.True   p result                     -> return [Num  p result 1]
-    K.False  p result                     -> return [Num  p result 0]
-    K.Num    p result n                   -> return [Num   p result n]
-    K.Label  p result l                   -> return [Label p result l]
-    K.Lambda p result norms               -> do
+    K.Add{..} -> return [Add pos result var1 var2]
+    K.Sub{..} -> return [Sub pos result var1 var2]
+    K.Mul{..} -> return [Mul pos result var1 var2]
+    K.Div{..} -> return [Div pos result var1 var2]
+    K.Eq {..} -> return [Eq  pos result var1 var2]
+    K.Ne {..} -> return [Ne  pos result var1 var2]
+    K.Gt {..} -> return [Gt  pos result var1 var2]
+    K.Lt {..} -> return [Lt  pos result var1 var2]
+    K.Call  {..} -> return [Call  pos var vars]
+    K.True  {..} -> return [Num   pos result 1]
+    K.False {..} -> return [Num   pos result 0]
+    K.Num   {..} -> return [Num   pos result num]
+    K.Label {..} -> return [Label pos result label]
+    K.Lambda {..} -> do
         anorms <- concat <$> mapM anormalNorm norms
-        return [Lambda p result anorms]
-    K.Let    _ _ blocks norms             -> do
+        return [Lambda pos result anorms]
+    K.Let{..} -> do
         forM_ blocks (\block -> case block of
             K.KBlock p n b -> W.tell [CBlock p n b])
         concat <$> mapM anormalNorm norms
-    K.If     p result bnorms tnorms fnorm -> do
+    K.If{..} -> do
         elseAddr     <- Var <$> W.lift U.genUUID
         continueAddr <- Var <$> W.lift U.genUUID
-        abnorms <- concat <$> mapM anormalNorm bnorms
-        atnorms <- concat <$> mapM anormalNorm tnorms
-        let usingVars = inspectUsingLabels fnorm 
+        abnorms <- concat <$> mapM anormalNorm cond
+        atnorms <- concat <$> mapM anormalNorm norm1
+        let usingVars = inspectUsingLabels norm2 
             callElse = CallElse elseAddr continueAddr usingVars
-        W.tell [ElseBlock p elseAddr continueAddr usingVars fnorm] -- こいつは関数になるので、必要な変数を引くようにする
-        return [Bne p result abnorms atnorms callElse]
+        W.tell [ElseBlock pos elseAddr continueAddr usingVars norm2] -- こいつは関数になるので、必要な変数を引くようにする
+        return [Bne pos result abnorms atnorms callElse]
 
 inspectUsingLabels :: [K.KNormal] -> [Var]
 inspectUsingLabels knorms = filter isGlobalVar

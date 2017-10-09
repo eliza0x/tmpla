@@ -1,3 +1,6 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
+
 {- |
 Module      : PNormal
 Description : 型検査をする
@@ -22,51 +25,52 @@ import qualified Data.Map.Lazy as M
 import qualified Data.Maybe as M
 
 data Expr = Define {
-            pos    :: P.SourcePos 
+            exprPos    :: P.SourcePos 
           , name   :: String 
           , body   :: Term 
           } deriving Eq
 
-data Term = Add    P.SourcePos Term Term  
-          | Sub    P.SourcePos Term Term    
-          | Mul    P.SourcePos Term Term    
-          | Div    P.SourcePos Term Term    
-          | Eq     P.SourcePos Term Term     
-          | Ne     P.SourcePos Term Term     
-          | Gt     P.SourcePos Term Term     
-          | Lt     P.SourcePos Term Term     
-          | If     P.SourcePos Term Term Term    
-          | True   P.SourcePos     
-          | False  P.SourcePos    
-          | Num    P.SourcePos Int  
-          | Label  P.SourcePos String     
-          | Let    P.SourcePos [Expr] Term  
-          | Lambda P.SourcePos String Type Term    
-          | App    P.SourcePos Term Term    
+data Term = Add    { pos :: P.SourcePos, term1 :: Term, term2 :: Term}  
+          | Sub    { pos :: P.SourcePos, term1 :: Term, term2 :: Term}    
+          | Mul    { pos :: P.SourcePos, term1 :: Term, term2 :: Term}    
+          | Div    { pos :: P.SourcePos, term1 :: Term, term2 :: Term}    
+          | Eq     { pos :: P.SourcePos, term1 :: Term, term2 :: Term}     
+          | Ne     { pos :: P.SourcePos, term1 :: Term, term2 :: Term}     
+          | Gt     { pos :: P.SourcePos, term1 :: Term, term2 :: Term}     
+          | Lt     { pos :: P.SourcePos, term1 :: Term, term2 :: Term}     
+          | If     { pos :: P.SourcePos, cond :: Term, term1 :: Term, term2 :: Term}
+          | App    { pos :: P.SourcePos, term1 :: Term, term2 :: Term}
+          | True   { pos :: P.SourcePos }    
+          | False  { pos :: P.SourcePos }   
+          | Num    { pos :: P.SourcePos, num :: Int }
+          | Label  { pos :: P.SourcePos, label :: String }
+          | Let    { pos :: P.SourcePos, exprs :: [Expr], term :: Term }
+          | Lambda { pos :: P.SourcePos, label :: String, arg :: Type, term :: Term}
           deriving Eq
 
+type Type = String
+
 instance Show Expr where
-    show (Define _ n b) = "Define " ++ n ++ " " ++ show b
+    show Define{..} = "Define " ++ name ++ " " ++ show body
 
 instance Show Term where
-    show (Add _ t t')     = "Add " ++ show t ++ " " ++ show t'
-    show (Sub _ t t')     = "Sub " ++ show t ++ " " ++ show t'
-    show (Mul _ t t')     = "Mul " ++ show t ++ " " ++ show t'
-    show (Div _ t t')     = "Div " ++ show t ++ " " ++ show t'
-    show (App _ t t')     = "App " ++ show t ++ " " ++ show t'
-    show (Eq  _ t t')     = "Eq  " ++ show t ++ " " ++ show t'
-    show (Ne  _ t t')     = "Ne  " ++ show t ++ " " ++ show t'
-    show (Gt  _ t t')     = "Gt  " ++ show t ++ " " ++ show t'
-    show (Lt  _ t t')     = "Lt  " ++ show t ++ " " ++ show t'
-    show (If  _ b t t')   = "If  " ++ show b ++ " " ++ show t ++ " " ++ show t'
-    show (PNormal.True  _) = "True"
-    show (PNormal.False _) = "False"
-    show (Num _ n)        = show n
-    show (Label _ l)      = l
-    show (Let _ exprs t)  = "Let " ++ show exprs ++ " in " ++ show t
-    show (Lambda _ l _ tr)   = "\\" ++ show l ++ " -> " ++ show tr
+    show Add{..} = "Add " ++ show term1 ++ " " ++ show term2
+    show Sub{..} = "Sub " ++ show term1 ++ " " ++ show term2
+    show Mul{..} = "Mul " ++ show term1 ++ " " ++ show term2
+    show Div{..} = "Div " ++ show term1 ++ " " ++ show term2
+    show Eq{..}  = "Eq  " ++ show term1 ++ " " ++ show term2
+    show Ne{..}  = "Ne  " ++ show term1 ++ " " ++ show term2
+    show Gt{..}  = "Gt  " ++ show term1 ++ " " ++ show term2
+    show Lt{..}  = "Lt  " ++ show term1 ++ " " ++ show term2
+    show App{..} = "App " ++ show term1 ++ " " ++ show term2
+    show If{..}  = "If  " ++ show cond ++ " " ++ show term1 ++ " " ++ show term2
+    show Num{..}    = show num
+    show Label{..}  = label
+    show Let{..}    = "Let " ++ show exprs ++ " in " ++ show term
+    show Lambda{..} = "\\" ++ show label ++ " -> " ++ show term
+    show PNormal.True{}  = "True"
+    show PNormal.False{} = "False"
 
-type Type = String
 type Env = M.Map String [Type]
 
 pnormalize :: [P.Expr] -> [Expr]
@@ -91,21 +95,21 @@ pnormalize exprs = map (pnorm (foldr genEnv M.empty $ filter (not . isDefine) ex
     pnorm _ _ = undefined
 
 preNormTerm :: P.Term -> Term
-preNormTerm term = case term of
-    P.Add    p t t'   -> Add    p (preNormTerm t) (preNormTerm t')
-    P.Sub    p t t'   -> Sub    p (preNormTerm t) (preNormTerm t')   
-    P.Mul    p t t'   -> Mul    p (preNormTerm t) (preNormTerm t')   
-    P.Div    p t t'   -> Div    p (preNormTerm t) (preNormTerm t')   
-    P.Eq     p t t'   -> Eq     p (preNormTerm t) (preNormTerm t')      
-    P.Ne     p t t'   -> Ne     p (preNormTerm t) (preNormTerm t')      
-    P.Gt     p t t'   -> Gt     p (preNormTerm t) (preNormTerm t')      
-    P.Lt     p t t'   -> Lt     p (preNormTerm t) (preNormTerm t')      
-    P.If     p b t t' -> If     p (preNormTerm b) (preNormTerm t)  (preNormTerm t')
-    P.True   p        -> PNormal.True  p
-    P.False  p        -> PNormal.False p      
-    P.Num    p n      -> Num    p n      
-    P.Label  p l      -> Label  p l       
-    P.Let    p es t   -> Let    p (pnormalize es) (preNormTerm t)
-    P.Lambda p l t    -> Lambda p l "Unknown" (preNormTerm t)
-    P.App    p t ts   -> foldl (App p) (preNormTerm t) (map preNormTerm ts)   
+preNormTerm = \case
+    P.Add   {..} -> Add    pos (preNormTerm term1) (preNormTerm term2)
+    P.Sub   {..} -> Sub    pos (preNormTerm term1) (preNormTerm term2)   
+    P.Mul   {..} -> Mul    pos (preNormTerm term1) (preNormTerm term2)   
+    P.Div   {..} -> Div    pos (preNormTerm term1) (preNormTerm term2)   
+    P.Eq    {..} -> Eq     pos (preNormTerm term1) (preNormTerm term2)      
+    P.Ne    {..} -> Ne     pos (preNormTerm term1) (preNormTerm term2)      
+    P.Gt    {..} -> Gt     pos (preNormTerm term1) (preNormTerm term2)      
+    P.Lt    {..} -> Lt     pos (preNormTerm term1) (preNormTerm term2)      
+    P.If    {..} -> If     pos (preNormTerm cond) (preNormTerm term1) (preNormTerm term2)
+    P.True  {..} -> PNormal.True  pos
+    P.False {..} -> PNormal.False pos    
+    P.Num   {..} -> Num    pos num      
+    P.Label {..} -> Label  pos label     
+    P.Let   {..} -> Let    pos (pnormalize exprs) (preNormTerm term)
+    P.Lambda{..} -> Lambda pos label "Unknown" (preNormTerm term)
+    P.App   {..} -> foldl (App pos) (preNormTerm term) (map preNormTerm terms)
 

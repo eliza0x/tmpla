@@ -13,86 +13,19 @@ Stability   : experimental
 
 module Parser
     ( parser
-    , Expr(..)
-    , Term(..)
-    , Type
-    , SourcePos(..)
-    , sourcePosPretty
-    , getPos
-    , mkPos
+    , P.Expr(..)
+    , P.Term(..)
+    , P.Type
+    , P.SourcePos(..)
+    , P.sourcePosPretty
+    , P.getPos
+    , P.mkPos
     ) where
 
 import Text.Megaparsec hiding (label, Label)
 import Prelude hiding (div) 
-
-data Expr = Define { pos  :: SourcePos
-                   , name :: String
-                   , args :: [String]
-                   , body :: Term } 
-          | TypeDef { pos  :: SourcePos
-                    , name :: String
-                    , args :: [String]
-                    } deriving Eq
-
-data Term = Add    SourcePos Term Term
-          | Sub    SourcePos Term Term
-          | Mul    SourcePos Term Term
-          | Div    SourcePos Term Term
-          | App    SourcePos Term [Term]
-          | Eq     SourcePos Term Term
-          | Ne     SourcePos Term Term
-          | Gt     SourcePos Term Term
-          | Lt     SourcePos Term Term
-          | If     SourcePos Term Term Term
-          | True   SourcePos
-          | False  SourcePos
-          | Num    SourcePos Int
-          | Label  SourcePos String
-          | Let    SourcePos [Expr] Term
-          | Lambda SourcePos String Term
-          deriving (Eq)
-
-type Type = String
-
-instance Show Expr where
-    show (Define _ n as b) = "Define " ++ n ++ " " ++ show as ++ " " ++ show b
-    show (TypeDef _ n as)  = "TypeDef " ++ n ++ " " ++ show as
-
-instance Show Term where
-    show (Add _ t t')     = "Add " ++ show t ++ " " ++ show t'
-    show (Sub _ t t')     = "Sub " ++ show t ++ " " ++ show t'
-    show (Mul _ t t')     = "Mul " ++ show t ++ " " ++ show t'
-    show (Div _ t t')     = "Div " ++ show t ++ " " ++ show t'
-    show (App _ l ts)     = "App " ++ show l ++ " " ++ show ts
-    show (Eq  _ t t')     = "Eq  " ++ show t ++ " " ++ show t'
-    show (Ne  _ t t')     = "Ne  " ++ show t ++ " " ++ show t'
-    show (Gt  _ t t')     = "Gt  " ++ show t ++ " " ++ show t'
-    show (Lt  _ t t')     = "Lt  " ++ show t ++ " " ++ show t'
-    show (If  _ b t t')   = "If  " ++ show b ++ " " ++ show t ++ " " ++ show t'
-    show (Parser.True  _) = "True"
-    show (Parser.False _) = "False"
-    show (Num _ n)        = show n
-    show (Label _ l)      = l
-    show (Let _ exprs t)  = "Let " ++ show exprs ++ show t
-    show (Lambda _ l tr)   = "\\" ++ show l ++ " -> " ++ show tr
-
-getPos :: Term -> SourcePos
-getPos (Add   p _ _)    = p
-getPos (Sub   p _ _)    = p
-getPos (Mul   p _ _)    = p
-getPos (Div   p _ _)    = p
-getPos (App   p _ _)    = p
-getPos (Eq    p _ _)    = p
-getPos (Ne    p _ _)    = p
-getPos (Gt    p _ _)    = p
-getPos (Lt    p _ _)    = p
-getPos (If    p _ _ _)  = p
-getPos (Parser.True  p) = p
-getPos (Parser.False p) = p
-getPos (Num   p _)      = p
-getPos (Label p _)      = p
-getPos (Let   p _ _)    = p
-getPos (Lambda p _ _)   = p
+import qualified Parser.Type as P
+import Parser.Type hiding (term, label, num)
 
 type TmplaParser = Parsec Dec String
 
@@ -190,8 +123,8 @@ term''' = space *> ( brace
         t <- true <|> false
         return $ t p
         where
-        true  = string "true" *> return Parser.True
-        false = string "false" *> return Parser.False
+        true  = string "true" *> return  Parser.Type.True
+        false = string "false" *> return Parser.Type.False
 
 label :: TmplaParser Term
 label = Label <$> getPosition <*> lowerWord

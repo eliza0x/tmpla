@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {- |
 Module      : KNormal
@@ -34,63 +35,63 @@ import Control.Eff ((:>))
 import Data.Void (Void)
 
 data KBlock = KBlock 
-    { pos  :: S.SourcePos
+    { pos'  :: S.SourcePos
     , name :: Var
     , body :: [KNormal]
     } deriving Eq
 
 data KNormal =
-      Lambda S.SourcePos Var [KNormal]
-    | Let    S.SourcePos Var [KBlock] [KNormal]
-    | If     S.SourcePos Var [KNormal] [KNormal] [KNormal]
-    | Add    S.SourcePos Var Var Var
-    | Sub    S.SourcePos Var Var Var 
-    | Mul    S.SourcePos Var Var Var
-    | Div    S.SourcePos Var Var Var
-    | Eq     S.SourcePos Var Var Var
-    | Ne     S.SourcePos Var Var Var
-    | Gt     S.SourcePos Var Var Var
-    | Lt     S.SourcePos Var Var Var
-    | Call   S.SourcePos Var [Var]
-    | True   S.SourcePos Var
-    | False  S.SourcePos Var
-    | Num    S.SourcePos Var Int
-    | Label  S.SourcePos Var String
+      Lambda { pos :: S.SourcePos, result :: Var, norms :: [KNormal] }
+    | Let    { pos :: S.SourcePos, result :: Var, blocks :: [KBlock], norms :: [KNormal] }
+    | If     { pos :: S.SourcePos, result :: Var, cond :: [KNormal], norm1 :: [KNormal], norm2 :: [KNormal] }
+    | Add    { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Sub    { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var } 
+    | Mul    { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Div    { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Eq     { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Ne     { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Gt     { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Lt     { pos :: S.SourcePos, result :: Var, var1 :: Var, var2 :: Var }
+    | Call   { pos :: S.SourcePos, var :: Var, vars :: [Var] }
+    | True   { pos :: S.SourcePos, result :: Var }
+    | False  { pos :: S.SourcePos, result :: Var }
+    | Num    { pos :: S.SourcePos, result :: Var, num :: Int }
+    | Label  { pos :: S.SourcePos, result :: Var, label :: String }
     deriving Eq
 
 instance Show KBlock where
     show (KBlock _ n b) = show n ++ " {\n" ++ addIndents b ++ "}\n"
 
 instance Show KNormal where
-    show (Add    _ result var var') = concat [cut $ show result, " := ", cut $ show var, " + ",  cut $ show var', ";"]
-    show (Sub    _ result var var') = concat [cut $ show result, " := ", cut $ show var, " - ",  cut $ show var', ";"]
-    show (Mul    _ result var var') = concat [cut $ show result, " := ", cut $ show var, " * ",  cut $ show var', ";"]
-    show (Div    _ result var var') = concat [cut $ show result, " := ", cut $ show var, " / ",  cut $ show var', ";"]
-    show (Eq     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " = ",  cut $ show var', ";"]
-    show (Ne     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " /= ", cut $ show var', ";"]
-    show (Gt     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " > ",  cut $ show var', ";"]
-    show (Lt     _ result var var') = concat [cut $ show result, " := ", cut $ show var, " < ",  cut $ show var', ";"]
-    show (Call   _ label args)      = "_return := " ++ cut (show label) ++ " (" ++ unwords (map (cut . show) args) ++ ");"
-    show (KNormal.True  _ result)   = show result ++ " := true;"
-    show (KNormal.False _ result)   = show result ++ " := false;"
-    show (Num    _ result n)        = show result ++ " := " ++ show n ++ ";"
-    show (Label  _ result label)    = show result ++ " := " ++ show label ++ ";"
-    show (Lambda _ result t)        = 
+    show Add{..} = concat [cut $ show result, " := ", cut $ show var1, " + ",  cut $ show var2, ";"]
+    show Sub{..} = concat [cut $ show result, " := ", cut $ show var1, " - ",  cut $ show var2, ";"]
+    show Mul{..} = concat [cut $ show result, " := ", cut $ show var1, " * ",  cut $ show var2, ";"]
+    show Div{..} = concat [cut $ show result, " := ", cut $ show var1, " / ",  cut $ show var2, ";"]
+    show Eq {..} = concat [cut $ show result, " := ", cut $ show var1, " = ",  cut $ show var2, ";"]
+    show Ne {..} = concat [cut $ show result, " := ", cut $ show var1, " /= ", cut $ show var2, ";"]
+    show Gt {..} = concat [cut $ show result, " := ", cut $ show var1, " > ",  cut $ show var2, ";"]
+    show Lt {..} = concat [cut $ show result, " := ", cut $ show var1, " < ",  cut $ show var2, ";"]
+    show Call{..} = "_return := " ++ cut (show var) ++ " (" ++ unwords (map (cut . show) vars) ++ ");"
+    show KNormal.True {..} = show result ++ " := true;"
+    show KNormal.False{..} = show result ++ " := false;"
+    show Num{..}   = show result ++ " := " ++ show num ++ ";"
+    show Label{..} = show result ++ " := " ++ show label ++ ";"
+    show Lambda{..} = 
         "(\\" ++ show result ++ "->\n"
-        ++ addIndents t
+        ++ addIndents norms
         ++ "\n)"
-    show (If     _ result boolNorm norm norm') = 
+    show If{..} =
         show result ++ " := "
         ++ "if (\n"
-        ++ addIndents boolNorm
+        ++ addIndents cond
         ++") {\n" 
-        ++ addIndents norm
+        ++ addIndents norm1
         ++ "} else {\n" 
-        ++ addIndents norm'
+        ++ addIndents norm2
         ++ "}"
-    show (Let    _ result defs norms) = 
+    show Let{..} = 
         show result ++ " := let {\n"
-        ++ (concatMap addIndent . lines . init . concat $ map show defs)
+        ++ (concatMap addIndent . lines . init . concat $ map show blocks)
         ++ "} in {\n" 
         ++ addIndents norms
         ++ "}\n"
@@ -103,9 +104,9 @@ addIndents = addIndent . unlines . map show
 
 addIndent :: String -> String
 addIndent = unlines . map (\line->tab++line) . lines
-
-tab :: String
-tab = L.replicate 4 ' '
+    where
+    tab :: String
+    tab = L.replicate 4 ' '
 
 data NameTag a = Tag Var a
 
@@ -126,42 +127,51 @@ knormalTag :: ( E.Member (EW.Writer [KNormal]) r    -- 展開リスト
             , E.SetMember EL.Lift (EL.Lift IO) r) -- IO
             => NameTag P.Term 
             -> E.Eff r ()
-knormalTag (Tag n term) = do
+knormalTag (Tag n prenormalizedterm) = do
     uuid  <- Var <$> EL.lift U.genUUID
     uuid' <- Var <$> EL.lift U.genUUID
-    case term of
-        P.Add    p t t'     -> EW.tell [Add p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Sub    p t t'     -> EW.tell [Sub p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Mul    p t t'     -> EW.tell [Mul p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Div    p t t'     -> EW.tell [Div p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Eq     p t t'     -> EW.tell [Eq  p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Ne     p t t'     -> EW.tell [Ne  p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Gt     p t t'     -> EW.tell [Gt  p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.Lt     p t t'     -> EW.tell [Lt  p n uuid uuid'] >> knormalTag (Tag uuid t) >> knormalTag (Tag uuid' t')
-        P.True   p          -> EW.tell [KNormal.True p n]
-        P.False  p          -> EW.tell [KNormal.False p n]
-        P.Num    p num      -> EW.tell [Num p n num]
-        P.Label  p l        -> EW.tell [Label p n l]
-        P.Let    p exprs t  -> do
+    case prenormalizedterm of
+        P.Add{..} -> arith (Add pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Sub{..} -> arith (Sub pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Mul{..} -> arith (Mul pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Div{..} -> arith (Div pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Eq{..}  -> arith (Eq  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Ne{..}  -> arith (Ne  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Gt{..}  -> arith (Gt  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Lt{..}  -> arith (Lt  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.True {..} -> EW.tell [KNormal.True pos n]
+        P.False{..} -> EW.tell [KNormal.False pos n]
+        P.Num  {..} -> EW.tell [Num pos n num]
+        P.Label{..} -> EW.tell [Label pos n label]
+        P.Let  {..} -> do
             blocks <- EL.lift $ knormalize exprs
-            knorms <- EL.lift $ knormalKNormal (returnTag t)
-            EW.tell [Let p n blocks knorms]
-        P.Lambda p l _ t    -> do
-            knorms <- EL.lift  $ knormalKNormal (Tag n t)
-            EW.tell [Lambda p (Var l) knorms]
-        P.If     p bt tt ft -> do
-            boolNorm  <- EL.lift $ knormalKNormal (returnTag bt)
-            trueNorm  <- EL.lift $ knormalKNormal (returnTag tt)
-            falseNorm <- EL.lift $ knormalKNormal (returnTag ft)
-            EW.tell [If  p n boolNorm trueNorm falseNorm]
-        P.App    p t t'     -> do
-            let l = foldApp t'
-            uuids <- EL.lift $ map Var <$> mapM (const U.genUUID) [1..length l]
-            EW.tell [Call p uuid uuids]
-            knormalTag (Tag uuid t)
-            mapM_ knormalTag (zipWith Tag uuids l)
+            knorms <- EL.lift $ knormalKNormal (returnTag term)
+            EW.tell [Let pos n blocks knorms]
+        P.Lambda{..} -> do
+            knorms <- EL.lift  $ knormalKNormal (Tag n term)
+            EW.tell [Lambda pos (Var label) knorms]
+        P.If{..} -> do
+            boolNorm  <- EL.lift $ knormalKNormal (returnTag cond)
+            trueNorm  <- EL.lift $ knormalKNormal (returnTag term1)
+            falseNorm <- EL.lift $ knormalKNormal (returnTag term2)
+            EW.tell [If  pos n boolNorm trueNorm falseNorm]
+        P.App{..} -> do
+            let expandedApp = expandApp term2
+            uuids <- EL.lift $ map Var <$> mapM (const U.genUUID) [1..length expandedApp]
+            EW.tell [Call pos uuid uuids]
+            knormalTag (Tag uuid term1)
+            mapM_ knormalTag (zipWith Tag uuids expandedApp)
     where
-    foldApp :: P.Term -> [P.Term]
-    foldApp (P.App _ t t') = t : foldApp t'
-    foldApp x              = [x]
+    arith :: ( E.Member (EW.Writer [KNormal]) r
+             , E.SetMember EL.Lift (EL.Lift IO) r)
+             => KNormal
+             -> NameTag P.Term 
+             -> NameTag P.Term
+             -> E.Eff r ()
+    arith knorm t t' =  EW.tell [knorm]
+                    >> knormalTag t 
+                    >> knormalTag t'
+    expandApp :: P.Term -> [P.Term]
+    expandApp (P.App _ t t') = t : expandApp t'
+    expandApp x              = [x]
 
