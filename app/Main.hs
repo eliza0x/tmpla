@@ -3,11 +3,11 @@
 module Main where
 
 import Parser
-import PNormal
+import SyntaxSugar
 import Typeing
 import Alpha
 import KNormal
-import ANormal
+import Expansion
 import Asm
 
 import System.Environment (getArgs)
@@ -20,17 +20,17 @@ import Data.Void (Void)
 
 main :: IO ()
 main = do
-    arg <- head <$> getArgs
-    file <- readFile arg
-    let exprs = parser arg file
+    fileName <- head <$> getArgs
+    file <- readFile fileName
+    let parsed = parser fileName file
     putStrLn "Source code"
     putStrLn file
     putStrLn "---------------"
     putStrLn "Parse"
-    mapM_ print exprs
+    mapM_ print parsed
     putStrLn "---------------"
     putStrLn "PNormal"
-    let pnorm = pnormalize exprs
+    let pnorm = pnormalize parsed
     print pnorm
     putStrLn "---------------"
     putStrLn "Alpha"

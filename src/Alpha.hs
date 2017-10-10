@@ -6,7 +6,7 @@ module Alpha
     , Env
     ) where
 
-import qualified PNormal as P
+import qualified SyntaxSugar as P
 import qualified Data.Map.Lazy as M
 import Data.Maybe (fromMaybe)
 

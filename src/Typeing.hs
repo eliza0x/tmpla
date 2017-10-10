@@ -21,7 +21,7 @@ module Typeing (
     ) where
  
 -- import qualified Parser as P
-import qualified PNormal as N
+import qualified SyntaxSugar as N
 -- import qualified Util as U
 
 import qualified Data.Map.Strict as M
