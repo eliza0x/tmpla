@@ -131,14 +131,14 @@ knormalTag (Tag n prenormalizedterm) = do
     uuid  <- Var <$> EL.lift U.genUUID
     uuid' <- Var <$> EL.lift U.genUUID
     case prenormalizedterm of
-        P.Add{..} -> arith (Add pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Sub{..} -> arith (Sub pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Mul{..} -> arith (Mul pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Div{..} -> arith (Div pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Eq{..}  -> arith (Eq  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Ne{..}  -> arith (Ne  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Gt{..}  -> arith (Gt  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
-        P.Lt{..}  -> arith (Lt  pos n uuid uuid') (Tag uuid term1) (Tag uuid term2)
+        P.Add{..} -> arith (Add pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Sub{..} -> arith (Sub pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Mul{..} -> arith (Mul pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Div{..} -> arith (Div pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Eq{..}  -> arith (Eq  pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Ne{..}  -> arith (Ne  pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Gt{..}  -> arith (Gt  pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
+        P.Lt{..}  -> arith (Lt  pos n uuid uuid') (Tag uuid term1) (Tag uuid' term2)
         P.True {..} -> EW.tell [KNormal.True pos n]
         P.False{..} -> EW.tell [KNormal.False pos n]
         P.Num  {..} -> EW.tell [Num pos n num]

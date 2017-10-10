@@ -22,4 +22,4 @@ import qualified Asm.Bin as AE
 import qualified Expansion as E
 
 emit :: [E.ABlock] -> [AE.BinAsm]
-emit = AE.expandInstruction . AA.alloc . AL.toLabeledAsm
+emit = AE.expandInstruction . AA.alloc . AL.toLabeledAsm 

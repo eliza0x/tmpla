@@ -1,4 +1,6 @@
-module Asm.Alloc where
+module Asm.Alloc
+    ( alloc
+    ) where
 
 import qualified Asm.Type as AT
 import qualified Asm.Label as AL
