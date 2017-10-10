@@ -3,11 +3,11 @@
 module Main where
 
 import Parser
-import PNormal
+import SyntaxSugar
 import Typeing
 import Alpha
 import KNormal
-import ANormal
+import Expansion
 import Asm
 
 import System.Environment (getArgs)

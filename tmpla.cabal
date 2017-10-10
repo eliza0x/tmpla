@@ -20,10 +20,10 @@ library
                      , Parser.Type
                      , Type
                      , Typeing
-                     , PNormal
+                     , SyntaxSugar
                      , Alpha
                      , KNormal
-                     , ANormal
+                     , Expansion
                      , Asm
                      , Asm.Type
                      , Asm.Label

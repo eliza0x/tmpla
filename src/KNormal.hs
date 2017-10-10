@@ -24,7 +24,7 @@ module KNormal
 import qualified Data.List as L
 
 import qualified Parser as S
-import qualified PNormal as P
+import qualified SyntaxSugar as P
 import qualified Util as U
 import Type(Var(..))
 

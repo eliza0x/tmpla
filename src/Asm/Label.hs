@@ -3,7 +3,7 @@ module Asm.Label
     , LabeledAsm
     )where
 
-import qualified ANormal as A
+import qualified Expansion as A
 import Type (Var(..))
 
 import Asm.Type
