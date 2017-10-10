@@ -1,4 +1,4 @@
-module Asm.Expand where
+module Asm.Bin where
 
 import qualified Parser as S
 import qualified Asm.Type as AT

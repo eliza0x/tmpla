@@ -1,6 +1,17 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
 
+{- |
+Module      : Alpha
+Description : ソースコード内に出てくる変数名を一意に変換する
+Copyright   : (c) eliza0x, 2017
+License     : MIT
+Maintainer  : me@eliza.link
+Stability   : experimental
+
+ソースコード内に出てくる変数名を一意に変換する。
+-}
+
 module Alpha
     ( alpha
     , Env

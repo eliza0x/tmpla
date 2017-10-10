@@ -11,14 +11,15 @@ Stability   : experimental
 module Asm
     ( AT.Asm(..)
     , AT.Tag(..)
-    , AL.LabeledAsm
-    , AL.toLabeledAsm
-    , AA.alloc
-    , AE.expandInstruction
+    , emit
     ) where
 
 import qualified Asm.Type as AT
 import qualified Asm.Label as AL
 import qualified Asm.Alloc as AA
-import qualified Asm.Expand as AE
+import qualified Asm.Bin as AE
 
+import qualified Expansion as E
+
+emit :: [E.ABlock] -> [AE.BinAsm]
+emit = AE.expandInstruction . AA.alloc . AL.toLabeledAsm
