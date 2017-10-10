@@ -50,15 +50,5 @@ main = do
         anorms <- anormalize knorms
         putStrLn . unlines . map show $ anorms
         putStrLn "---------------"
-        putStrLn "Labeled asm\n"
-        let labeledAsm = toLabeledAsm anorms
-        mapM_ print labeledAsm
-        putStrLn "---------------"
-        putStrLn "Alloc\n"
-        let alloced =  alloc labeledAsm 
-        mapM_ print alloced
-        putStrLn "---------------"
-        putStrLn "Expand\n"
-        let exed = expandInstruction alloced
-        mapM_ print exed
-
+        putStrLn "Emit\n"
+        mapM_ print $ emit anorms

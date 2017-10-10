@@ -28,7 +28,7 @@ library
                      , Asm.Type
                      , Asm.Label
                      , Asm.Alloc
-                     , Asm.Expand
+                     , Asm.Bin
                      , Util
   build-depends:       base >= 4.7 && < 5
                      , megaparsec
